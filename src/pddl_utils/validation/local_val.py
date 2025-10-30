@@ -43,5 +43,5 @@ class LocalVAL(VAL):
                 loc
             )
         )
-        assert res_code == 0, "Could not build Fast-Downward in {}".format(loc)
+        assert res_code == 0, "Could not build VAL in {}. Did you install bison and flex?".format(loc)
         assert os.path.exists(self._exec)
