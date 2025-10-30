@@ -1,40 +1,24 @@
-from unittest.mock import patch
+import pytest
 
-from pddl_utils import VAL
+from pddl_utils import LocalVAL, DockerVAL
 
 
+@pytest.mark.parametrize("validator_class", [LocalVAL, DockerVAL])
 class TestVAL:
-    """Essential tests for VAL validator."""
+    """Essential tests for VAL validators."""
 
-    def test_init(self):
-        """Test VAL initialization."""
-        with patch('os.path.exists', return_value=True):
-            validator = VAL()
-            assert hasattr(validator, '_exec')
-            assert validator._exec.endswith('VAL/validate')
-
-    @patch('subprocess.getoutput')
-    def test_validate_complete_plan(self, mock_getoutput, simple_domain, simple_problem, valid_plan):
+    def test_validate_complete_plan(self, validator_class, simple_domain, simple_problem, valid_plan):
         """Test validating domain, problem, and plan."""
         mock_output = "Plan valid"
-        mock_getoutput.return_value = mock_output
-        
-        with patch('os.path.exists', return_value=True):
-            validator = VAL()
-            success, output = validator.validate(simple_domain, simple_problem, valid_plan)
-            
-            assert success is True
-            assert output == mock_output
 
-    @patch('subprocess.getoutput')
-    def test_validate_invalid_plan(self, mock_getoutput, simple_domain, simple_problem, invalid_plan):
+        validator = validator_class()
+        success, output = validator.validate(simple_domain, simple_problem, valid_plan)
+        assert success
+
+    def test_validate_invalid_plan(self, validator_class, simple_domain, simple_problem, invalid_plan):
         """Test validating an invalid plan."""
-        mock_output = "Plan failed to execute"
-        mock_getoutput.return_value = mock_output
-        
-        with patch('os.path.exists', return_value=True):
-            validator = VAL()
-            success, output = validator.validate(simple_domain, simple_problem, invalid_plan)
-            
-            assert success is True  # Function call succeeded
-            assert "Plan failed" in output  # But plan validation failed
+        validator = validator_class()
+        success, output = validator.validate(simple_domain, simple_problem, invalid_plan)
+        gt_output = "(Set (holding a) to true)"
+        assert gt_output in output
+        assert not success

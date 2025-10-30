@@ -1,4 +1,6 @@
-from .fast_downward import FastDownward
-from .val import VAL
+from .planning.local_fast_downward import LocalFastDownward
+from .planning.docker_fast_downward import DockerFastDownward
+from .validation.local_val import LocalVAL
+from .validation.docker_val import DockerVAL
 
-__all__ = ["FastDownward", "VAL"]
+__all__ = ["LocalFastDownward", "DockerFastDownward", "LocalVAL", "DockerVAL"]

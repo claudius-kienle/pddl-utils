@@ -18,9 +18,8 @@ class Planner:
 
     def plan_from_pddl(self, dom_file, prob_file, horizon=np.inf, timeout=10, remove_files=False):
         """PDDL-specific planning method."""
-        cmd_str = self._get_cmd_str(dom_file, prob_file, timeout)
         start_time = time.time()
-        output = subprocess.getoutput(cmd_str)
+        output = self._run(dom_file, prob_file, timeout)
         if remove_files:
             os.remove(dom_file)
             os.remove(prob_file)
@@ -32,25 +31,8 @@ class Planner:
             raise PlanningFailure("PDDL planning failed due to horizon")
         return pddl_plan
 
-    def plan_from_sas(self, sas_file, horizon=np.inf, timeout=10):
-        """PDDL-specific planning method using SAS file."""
-        cmd_str = self._get_cmd_str_searchonly(sas_file, timeout)
-        start_time = time.time()
-        output = subprocess.getoutput(cmd_str)
-        self._cleanup()
-        if time.time() - start_time > timeout:
-            raise PlanningTimeout("Planning timed out!")
-        pddl_plan = self._output_to_plan(output)
-        if len(pddl_plan) > horizon:
-            raise PlanningFailure("PDDL planning failed due to horizon")
-        return pddl_plan
-
     @abc.abstractmethod
-    def _get_cmd_str(self, dom_file, prob_file, timeout):
-        raise NotImplementedError("Override me!")
-
-    @abc.abstractmethod
-    def _get_cmd_str_searchonly(self, sas_file, timeout):
+    def _run(self, dom_file, prob_file, timeout) -> str:
         raise NotImplementedError("Override me!")
 
     @abc.abstractmethod

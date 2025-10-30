@@ -1,60 +1,16 @@
 """Fast-downward planner.
 http://www.fast-downward.org/ObtainingAndRunningFastDownward
-
-Code copied from https://github.com/ronuchit/pddlgym_planners/blob/master/pddlgym_planners/fd.py
 """
 
 import re
-import os
-import sys
-import subprocess
-import tempfile
-from pddl_utils.planner import Planner, PlanningFailure
-
-FD_URL = "https://github.com/aibasel/downward.git"
+from pddl_utils.planning.planner import Planner, PlanningFailure
 
 
-class FastDownward(Planner):
-    """Fast-downward planner.
+class PDDLPlanner(Planner):
+    """pddl planner
     """
-    def __init__(self, alias_flag="--alias seq-opt-lmcut", final_flags=""):
-        super().__init__()
-        dirname = os.path.dirname(os.path.realpath(__file__))
-        self._exec = os.path.join(dirname, "FD/fast-downward.py")
-        _bin_exec = os.path.join(dirname, "FD/builds/release/downward")
-        print("Instantiating FD", end=' ')
-        if alias_flag:
-            print("with", alias_flag, end=' ')
-        if final_flags:
-            print("with", final_flags, end=' ')
-        print()
-        self._alias_flag = alias_flag
-        self._final_flags = final_flags
-        if not os.path.exists(self._exec) or not os.path.exists(_bin_exec):
-            self._install_fd()
 
-    def _get_cmd_str(self, dom_file, prob_file, timeout):
-        sas_file = tempfile.NamedTemporaryFile(delete=False).name
-        timeout_cmd = "gtimeout" if sys.platform == "darwin" else "timeout"
-        cmd_str = "{} {} {} {} --sas-file {} {} {} {}".format(
-            timeout_cmd, timeout, self._exec, self._alias_flag, sas_file,
-            dom_file, prob_file, self._final_flags)
-        return cmd_str
-
-    def _get_cmd_str_searchonly(self, sas_file, timeout):
-        timeout_cmd = "gtimeout" if sys.platform == "darwin" else "timeout"
-        cmd_str = "{} {} {} {} --search {} {}".format(
-            timeout_cmd, timeout, self._exec, self._alias_flag,
-            sas_file, self._final_flags)
-        return cmd_str
-
-    def _cleanup(self):
-        """Run FD cleanup
-        """
-        cmd_str = "{} --cleanup".format(self._exec)
-        subprocess.getoutput(cmd_str)
-
-    def _output_to_plan(self, output):
+    def _output_to_plan(self, output: str):
         # Technically this is number of evaluated states which is always
         # 1+number of expanded states, but we report evaluated for consistency
         # with FF.
@@ -105,13 +61,3 @@ class FastDownward(Planner):
                 output))
         # Add brackets around actions to match PDDL format
         return [f"({action.strip()})" for action in fd_plan]
-
-    def _install_fd(self):
-        loc = os.path.dirname(self._exec)
-        # Install and compile FD.
-        if not os.path.exists(loc):
-            res_code = os.system("git clone {} {}".format(FD_URL, loc))
-            assert res_code == 0, "Could not clone Fast-Downward from {}".format(FD_URL)
-        res_code = os.system("cd {} && git checkout release-19.06 && ./build.py && cd -".format(loc))
-        assert res_code == 0, "Could not build Fast-Downward in {}".format(loc)
-        assert os.path.exists(self._exec)

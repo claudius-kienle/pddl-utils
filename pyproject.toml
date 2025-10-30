@@ -2,15 +2,11 @@
 name = "pddl-utils"
 version = "0.1.0"
 authors = [
-    { name = "Claudius Kienle", email = "claudius.kienle@tu-darmstadt.de" }
+    { name = "Claudius Kienle", email = "claudius.kienle@tu-darmstadt.de" },
 ]
 
-dependencies = [
-    "numpy",
-]
+dependencies = ["numpy"]
 
 [project.optional-dependencies]
-test = [
-    "pytest>=6.0",
-    "pytest-cov",
-]
+test = ["pytest>=6.0", "pytest-cov"]
+docker = ["docker"]

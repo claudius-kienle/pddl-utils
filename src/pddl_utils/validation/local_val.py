@@ -2,10 +2,12 @@ import os
 import subprocess
 from typing import Optional
 
+from pddl_utils.validation.val import VAL
+
 VAL_URL = "https://github.com/KCL-Planning/VAL.git"
 
 
-class VAL:
+class LocalVAL(VAL):
     """VAL validator"""
 
     def __init__(self):
@@ -17,23 +19,18 @@ class VAL:
         if not os.path.exists(self._exec):
             self._install_val()
 
-    def validate(self, dom_file: str, prob_file: Optional[str], plan_file: Optional[str], remove_files=False):
+    def _validate(self, dom_file: str, prob_file: Optional[str], plan_file: Optional[str]) -> tuple[bool, str]:
         """PDDL-specific planning method."""
-        cmd_str = "{} -v {}".format(
-            self._exec, dom_file
-        )
+        cmd_str = "{} -v {}".format(self._exec, dom_file)
         if prob_file is not None:
             cmd_str += " {}".format(prob_file)
         if plan_file is not None:
             cmd_str += " {}".format(plan_file)
-        output = subprocess.getoutput(cmd_str)
-        if remove_files:
-            os.remove(dom_file)
-            if prob_file is not None:
-                os.remove(prob_file)
-            if plan_file is not None:
-                os.remove(plan_file)
-        return True, output
+        
+        result = subprocess.run(cmd_str, shell=True, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+        success = result.returncode == 0
+        return success, output.strip()
 
     def _install_val(self):
         loc = os.path.dirname(self._exec)
