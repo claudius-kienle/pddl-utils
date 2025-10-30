@@ -1,0 +1,5 @@
+# Valid plan for simple_problem.pddl
+(pick-up a)
+(stack a b)
+(pick-up c)
+(stack c a)

@@ -1,0 +1,16 @@
+[project]
+name = "pddl-utils"
+version = "0.1.0"
+authors = [
+    { name = "Claudius Kienle", email = "claudius.kienle@tu-darmstadt.de" }
+]
+
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=6.0",
+    "pytest-cov",
+]
