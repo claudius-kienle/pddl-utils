@@ -1,0 +1,843 @@
+"""Structs used throughout the codebase."""
+
+# copied from https://github.com/Learning-and-Intelligent-Systems/predicators/blob/master/predicators/structs.py
+# and https://github.com/tomsilver/pddlgym/blob/master/pddlgym/structs.py
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from functools import cached_property, lru_cache
+from typing import (
+    overload,
+    Any,
+    Callable,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+    cast,
+)
+
+
+class Symbols(Enum):
+    """A set of symbols that can be used in PDDL."""
+
+    ROUND_BRACKET_LEFT = "("
+    ROUND_BRACKET_RIGHT = ")"
+    TYPE_SEP = "-"
+    EQUAL = "="
+    ACTION = ":action"
+    AND = "and"
+    CONSTANTS = ":constants"
+    DEFINE = "define"
+    DERIVED = ":derived"
+    DOMAIN = "domain"
+    DOMAIN_P = ":domain"
+    EFFECT = ":effect"
+    EITHER = "either"
+    EXISTS = "exists"
+    FORALL = "forall"
+    GOAL = ":goal"
+    IMPLY = "imply"
+    INIT = ":init"
+    NOT = "not"
+    OBJECT = "object"
+    OBJECTS = ":objects"
+    ONEOF = "oneof"
+    OR = "or"
+    PARAMETERS = ":parameters"
+    PRECONDITION = ":precondition"
+    PREDICATES = ":predicates"
+    PROBLEM = "problem"
+    REQUIREMENTS = ":requirements"
+    TYPES = ":types"
+    METRIC = ":metric"
+    WHEN = "when"
+    GREATER_EQUAL = ">="
+    GREATER = ">"
+    LESSER_EQUAL = "<="
+    LESSER = "<"
+    MINUS = "-"
+    PLUS = "+"
+    TIMES = "*"
+    DIVIDE = "/"
+    ASSIGN = "assign"
+    SCALE_UP = "scale-up"
+    SCALE_DOWN = "scale-down"
+    INCREASE = "increase"
+    DECREASE = "decrease"
+    MAXIMIZE = "maximize"
+    MINIMIZE = "minimize"
+    TOTAL_COST = "total-cost"
+
+
+ALL_SYMBOLS: set[str] = {v.value for v in Symbols}
+
+
+def is_a_keyword(word: str) -> bool:
+    """Check that the word is not a keyword."""
+    return word in ALL_SYMBOLS
+
+
+@dataclass(frozen=True, order=True)
+class Type:
+    """Struct defining a type."""
+
+    name: str
+    feature_names: Sequence[str] = field(repr=False, default_factory=list)
+    parent: Optional[Type] = field(default=None, repr=False)
+
+    @property
+    def dim(self) -> int:
+        """Dimensionality of the feature vector of this object type."""
+        return len(self.feature_names)
+
+    def get_ancestors(self) -> set[Type]:
+        """Get the set of all types that are ancestors (i.e. parents,
+        grandparents, great-grandparents, etc.) of the current type."""
+        curr_type: Optional[Type] = self
+        ancestors_set = set()
+        while curr_type is not None:
+            ancestors_set.add(curr_type)
+            curr_type = curr_type.parent
+        return ancestors_set
+
+    def __call__(self, name: str) -> _TypedEntity:
+        """Convenience method for generating _TypedEntities."""
+        if name.startswith("?"):
+            return Variable(name, self)
+        return Object(name, self)
+
+    def __hash__(self) -> int:
+        return hash((self.name, tuple(self.feature_names)))
+
+
+@dataclass(frozen=True, order=True, repr=False)
+class _TypedEntity:
+    """Struct defining an entity with some type, either an object (e.g.,
+    block3) or a variable (e.g., ?block).
+
+    Should not be instantiated externally.
+    """
+
+    name: str
+    type: Type
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.type, Type)
+
+    @cached_property
+    def _str(self) -> str:
+        return f"{self.name}:{self.type.name}"
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return self._str
+
+    def is_instance(self, t: Type) -> bool:
+        """Return whether this entity is an instance of the given type, taking
+        hierarchical typing into account."""
+        cur_type: Optional[Type] = self.type
+        while cur_type is not None:
+            if cur_type == t:
+                return True
+            cur_type = cur_type.parent
+        return False
+
+
+@dataclass(frozen=True, order=True, repr=False)
+class Object(_TypedEntity):
+    """Struct defining an Object, which is just a _TypedEntity whose name does
+    not start with "?"."""
+
+    def __post_init__(self) -> None:
+        assert not self.name.startswith("?")
+
+    def __hash__(self) -> int:
+        # By default, the dataclass generates a new __hash__ method when
+        # frozen=True and eq=True, so we need to override it.
+        return self._hash
+
+
+@dataclass(frozen=True, order=True, repr=False)
+class Variable(_TypedEntity):
+    """Struct defining a Variable, which is just a _TypedEntity whose name
+    starts with "?"."""
+
+    def __post_init__(self) -> None:
+        assert self.name.startswith("?")
+
+    def __hash__(self) -> int:
+        # By default, the dataclass generates a new __hash__ method when
+        # frozen=True and eq=True, so we need to override it.
+        return self._hash
+
+
+@dataclass(frozen=True, order=False, repr=False)
+class Predicate:
+    """Struct defining a predicate (a lifted classifier over states)."""
+
+    name: str
+    types: Sequence[Type]
+    # The classifier takes in a complete state and a sequence of objects
+    # representing the arguments. These objects should be the only ones
+    # treated "specially" by the classifier.
+    _classifier: Optional[Callable[[State, Sequence[Object]], bool]] = field(compare=False, default=None)
+
+    def __call__(self, entities: Sequence[_TypedEntity]) -> _Atom:
+        """Convenience method for generating Atoms."""
+        if self.arity == 0:
+            raise ValueError(
+                "Cannot use __call__ on a 0-arity predicate, "
+                "since we can't determine whether it becomes a "
+                "LiftedAtom or a GroundAtom. Use the LiftedAtom "
+                "or GroundAtom constructors directly instead"
+            )
+        if all(isinstance(ent, Variable) for ent in entities):
+            return LiftedAtom(self, entities)
+        if all(isinstance(ent, Object) for ent in entities):
+            return GroundAtom(self, entities)
+        raise ValueError("Cannot instantiate Atom with mix of " "variables and objects")
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    @cached_property
+    def arity(self) -> int:
+        """The arity of this predicate (number of arguments)."""
+        return len(self.types)
+
+    def holds(self, state: State, objects: Sequence[Object]) -> bool:
+        """Public method for calling the classifier.
+
+        Performs type checking first.
+        """
+        assert len(objects) == self.arity
+        for obj, pred_type in zip(objects, self.types):
+            assert isinstance(obj, Object)
+            assert obj.is_instance(pred_type)
+        assert self._classifier is not None
+        return self._classifier(state, objects)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def pretty_str(self) -> tuple[str, str]:
+        """Display the predicate in a nice human-readable format.
+
+        Returns a tuple of (variables string, body string).
+        """
+        if hasattr(self._classifier, "pretty_str"):
+            # This is an invented predicate, from the predicate grammar.
+            pretty_str_f = getattr(self._classifier, "pretty_str")
+            return pretty_str_f()
+        # This is a known predicate, not from the predicate grammar.
+        vars_str = ", ".join(
+            # f"{CFG.grammar_search_classifier_pretty_str_names[i]}:{t.name}"
+            f"{i}:{t.name}"
+            for i, t in enumerate(self.types)
+        )
+        vars_str_no_types = ", ".join(
+            # f"{CFG.grammar_search_classifier_pretty_str_names[i]}"
+            f"{i}"
+            for i in range(self.arity)
+        )
+        body_str = f"{self.name}({vars_str_no_types})"
+        return vars_str, body_str
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL
+        file."""
+        if self.arity == 0:
+            return f"({self.name})"
+        vars_str = " ".join(f"?x{i} - {t.name}" for i, t in enumerate(self.types))
+        return f"({self.name} {vars_str})"
+
+    @property
+    def is_negated(self) -> bool:
+        return self.name.startswith("NOT-")
+
+    def get_negation(self) -> Predicate:
+        """Return a negated version of this predicate."""
+        return Predicate("NOT-" + self.name, self.types, self._negated_classifier)
+
+    def _negated_classifier(self, state: State, objects: Sequence[Object]) -> bool:
+        # Separate this into a named function for pickling reasons.
+        assert self._classifier is not None
+        return not self._classifier(state, objects)
+
+    def __lt__(self, other: Predicate) -> bool:
+        return str(self) < str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class _Atom:
+    """Struct defining an atom (a predicate applied to either variables or
+    objects).
+
+    Should not be instantiated externally.
+    """
+
+    predicate: Predicate
+    entities: Sequence[_TypedEntity]
+
+    def __post_init__(self) -> None:
+        if isinstance(self.entities, _TypedEntity):
+            raise ValueError("Atoms expect a sequence of entities, not a " "single entity.")
+        assert len(self.entities) == self.predicate.arity
+        for ent, pred_type in zip(self.entities, self.predicate.types):
+            assert ent.is_instance(pred_type)
+
+    @property
+    def _str(self) -> str:
+        raise NotImplementedError("Override me")
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL
+        file."""
+        if not self.entities:
+            return f"({self.predicate.name})"
+        entities_str = " ".join(e.name for e in self.entities)
+        return f"({self.predicate.name} {entities_str})"
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, _Atom)
+        return str(self) == str(other)
+
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, _Atom)
+        return str(self) < str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class LiftedAtom(_Atom):
+    """Struct defining a lifted atom (a predicate applied to variables)."""
+
+    @cached_property
+    def variables(self) -> list[Variable]:
+        """Arguments for this lifted atom.
+
+        A list of "Variable"s.
+        """
+        return [cast(Variable, ent) for ent in self.entities]
+
+    @cached_property
+    def exposed_variables(self) -> set[Variable]:
+        return set(self.variables)
+
+    @cached_property
+    def _str(self) -> str:
+        return str(self.predicate) + "(" + ", ".join(map(str, self.variables)) + ")"
+
+    def ground(self, sub: VarToObjSub, state: set[GroundAtom]) -> set[GroundAtom]:
+        """Create a GroundAtom with a given substitution."""
+        assert set(self.variables).issubset(set(sub.keys()))
+        return {GroundAtom(self.predicate, [sub[v] for v in self.variables])}
+
+    def substitute(self, sub: VarToVarSub) -> LiftedAtom:
+        """Create a LiftedAtom with a given substitution."""
+        assert set(self.variables).issubset(set(sub.keys()))
+        return LiftedAtom(self.predicate, [sub[v] for v in self.variables])
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class GroundAtom(_Atom):
+    """Struct defining a ground atom (a predicate applied to objects)."""
+
+    @cached_property
+    def objects(self) -> list[Object]:
+        """Arguments for this ground atom.
+
+        A list of "Object"s.
+        """
+        return list(cast(Object, ent) for ent in self.entities)
+
+    @cached_property
+    def _str(self) -> str:
+        return str(self.predicate) + "(" + ", ".join(map(str, self.objects)) + ")"
+
+    def lift(self, sub: ObjToVarSub) -> LiftedAtom:
+        """Create a LiftedAtom with a given substitution."""
+        assert set(self.objects).issubset(set(sub.keys()))
+        return LiftedAtom(self.predicate, [sub[o] for o in self.objects])
+
+    def holds(self, state: State) -> bool:
+        """Check whether this ground atom holds in the given state."""
+        return self.predicate.holds(state, self.objects)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class LiteralConjunction:
+    """A logical conjunction (AND) of Literals."""
+
+    literals: Sequence[LiftedFormula]
+
+    @cached_property
+    def exposed_variables(self) -> set[Variable]:
+        """Get all variables from the literals."""
+        variables = set()
+        for lit in self.literals:
+            variables.update(v for v in lit.exposed_variables)
+        return variables
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL file."""
+        if len(self.literals) == 1:
+            return self.literals[0].pddl_str()
+        literal_strs = [lit.pddl_str() for lit in self.literals]
+        return f"(and {' '.join(literal_strs)})"
+
+    def ground(self, sub: VarToObjSub, state: set[GroundAtom]) -> set[GroundAtom]:
+        """Ground the existential by substituting variables with objects."""
+        assert set(self.exposed_variables).issubset(set(sub.keys()))
+        grounded_literals = []
+        for lit in self.literals:
+            grounded_literals.extend(lit.ground(sub, state))
+        return set(grounded_literals)
+
+    @cached_property
+    def _str(self) -> str:
+        return f"AND({', '.join(str(lit) for lit in self.literals)})"
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, LiteralConjunction)
+        return str(self) == str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class LiteralDisjunction:
+    """A logical disjunction (OR) of Literals."""
+
+    literals: Sequence[LiftedFormula]
+
+    @cached_property
+    def exposed_variables(self) -> set[Variable]:
+        """Get all variables from the literals."""
+        variables = set()
+        for lit in self.literals:
+            variables.update(v.name for v in lit.exposed_variables)
+        return variables
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL file."""
+        if len(self.literals) == 1:
+            return self.literals[0].pddl_str()
+        literal_strs = [lit.pddl_str() for lit in self.literals]
+        return f"(or {' '.join(literal_strs)})"
+
+    @cached_property
+    def _str(self) -> str:
+        return f"OR({', '.join(str(lit) for lit in self.literals)})"
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, LiteralDisjunction)
+        return str(self) == str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class ForAll:
+    """Represents a universal quantification (ForAll) over the given variables in the given body."""
+
+    variables: Sequence[Variable]
+    body: LiftedFormula
+    is_negative: bool = False
+
+    @cached_property
+    def exposed_variables(self) -> set[Variable]:
+        return self.body.exposed_variables - set(self.variables)
+
+    @cached_property
+    def positive(self) -> ForAll:
+        """Return the positive version of this ForAll."""
+        return ForAll(self.variables, self.body, is_negative=False)
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL file."""
+        body_str = self.body.pddl_str()
+        var_str = " ".join(f"{v.name} - {v.type.name}" for v in self.variables)
+        forall_str = f"(forall ({var_str}) {body_str})"
+        if self.is_negative:
+            return f"(not {forall_str})"
+        return forall_str
+
+    @cached_property
+    def _str(self) -> str:
+        forall_str = f"FORALL({[v.name for v in self.variables]}) : {self.body}"
+        if self.is_negative:
+            return "NOT-" + forall_str
+        return forall_str
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, ForAll)
+        return str(self) == str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class Exists:
+    """Represents an existential quantification (Exists) over the given variables in the given body."""
+
+    variables: Sequence[Variable]
+    body: LiftedFormula
+    is_negative: bool = False
+
+    @cached_property
+    def exposed_variables(self) -> set[Variable]:
+        return self.body.exposed_variables - set(self.variables)
+
+    @cached_property
+    def positive(self) -> Exists:
+        """Return the positive version of this Exists."""
+        return Exists(self.variables, self.body, is_negative=False)
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL file."""
+        body_str = self.body.pddl_str()
+        var_str = " ".join(f"{v.name} - {v.type.name}" for v in self.variables)
+        exists_str = f"(exists ({var_str}) {body_str})"
+        if self.is_negative:
+            return f"(not {exists_str})"
+        return exists_str
+
+    @cached_property
+    def _str(self) -> str:
+        exists_str = f"EXISTS({[v.name for v in self.variables]}) : {self.body}"
+        if self.is_negative:
+            return "NOT-" + exists_str
+        return exists_str
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, Exists)
+        return str(self) == str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class Operator:
+    """Struct defining a symbolic operator (as in STRIPS).
+
+    Lifted! Note here that the ignore_effects - unlike the
+    add_effects and delete_effects - are universally
+    quantified over all possible groundings.
+    """
+
+    name: str
+    parameters: Sequence[Variable]
+    preconditions: LiftedFormula
+    effects: LiftedFormula
+
+    def __post_init__(self) -> None:
+        remaining_precond_vars = self.preconditions.exposed_variables - set(self.parameters)
+        if len(remaining_precond_vars) > 0:
+            raise ValueError(
+                f"Syntax error: Action {self.name} has undeclared variables in precondition: {remaining_precond_vars}"
+            )
+        remaining_effect_vars = self.effects.exposed_variables - set(self.parameters)
+        if len(remaining_effect_vars) > 0:
+            raise ValueError(
+                f"Syntax error: Action {self.name} has undeclared variables in effect: {remaining_effect_vars}"
+            )
+
+    @lru_cache(maxsize=None)
+    def ground(self, objects: tuple[Object], state: frozenset[GroundAtom]) -> GroundOperator:
+        """Ground into a _GroundOperator, given objects.
+
+        Insist that objects are tuple for hashing in cache.
+        """
+        assert isinstance(objects, tuple)
+        assert len(objects) == len(self.parameters)
+        assert all(o.is_instance(p.type) for o, p in zip(objects, self.parameters))
+        sub = dict(zip(self.parameters, objects))
+
+        preconditions = self.preconditions.ground(sub, state)
+        effects = self.effects.ground(sub, state)
+        return GroundOperator(self, list(objects), preconditions, effects)
+
+    @cached_property
+    def _str(self) -> str:
+        return f"""STRIPS-{self.name}:
+    Parameters: {self.parameters}
+    Preconditions: {self.preconditions}
+    Effects: {self.effects}"""
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL
+        file."""
+        params_str = " ".join(f"{p.name} - {p.type.name}" for p in self.parameters)
+        preconds_str = "\n        ".join(atom.pddl_str() for atom in self.preconditions)
+        effects_str = "\n        ".join(atom.pddl_str() for atom in self.effects)
+        return f"""(:action {self.name}
+    :parameters ({params_str})
+    :precondition (and {preconds_str})
+    :effect (and {effects_str})
+  )"""
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, Operator)
+        return str(self) == str(other)
+
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, Operator)
+        return str(self) < str(other)
+
+    def __gt__(self, other: object) -> bool:
+        assert isinstance(other, Operator)
+        return str(self) > str(other)
+
+    def copy_with(self, **kwargs: Any) -> Operator:
+        """Create a copy of the operator, optionally while replacing any of the
+        arguments."""
+        default_kwargs = dict(
+            name=self.name,
+            parameters=self.parameters,
+            preconditions=self.preconditions,
+            effects=self.effects,
+        )
+        assert set(kwargs.keys()).issubset(default_kwargs.keys())
+        default_kwargs.update(kwargs)
+        # mypy is known to have issues with this pattern:
+        # https://github.com/python/mypy/issues/5382
+        return Operator(**default_kwargs)  # type: ignore
+
+    def get_complexity(self) -> float:
+        """Get the complexity of this operator.
+
+        We only care about the arity of the operator, since that is what
+        affects grounding. We'll use 2^arity as a measure of grounding
+        effort.
+        """
+        return float(2 ** len(self.parameters))
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class GroundOperator:
+    """A Operator + objects.
+
+    Should not be instantiated externally.
+    """
+
+    parent: Operator
+    objects: Sequence[Object]
+    preconditions: set[GroundAtom]
+    effects: set[GroundAtom]
+
+    @cached_property
+    def _str(self) -> str:
+        return f"""GroundSTRIPS-{self.name}:
+    Parameters: {self.objects}
+    Preconditions: {sorted(self.preconditions, key=str)}
+    Effects: {sorted(self.effects, key=str)}"""
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    @property
+    def name(self) -> str:
+        """Name of this ground Operator."""
+        return self.parent.name
+
+    @property
+    def short_str(self) -> str:
+        """Abbreviated name, not necessarily unique."""
+        obj_str = ", ".join([o.name for o in self.objects])
+        return f"{self.name}({obj_str})"
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, GroundOperator)
+        return str(self) == str(other)
+
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, GroundOperator)
+        return str(self) < str(other)
+
+    def __gt__(self, other: object) -> bool:
+        assert isinstance(other, GroundOperator)
+        return str(self) > str(other)
+
+
+# Helper functions for creating negated predicates and literals
+@overload
+def Not(x: Predicate) -> Predicate: ...
+
+
+@overload
+def Not(x: LiftedAtom) -> LiftedAtom: ...
+
+
+@overload
+def Not(x: GroundAtom) -> GroundAtom: ...
+
+
+@overload
+def Not(x: ForAll) -> ForAll: ...
+
+
+@overload
+def Not(x: Exists) -> Exists: ...
+
+
+@overload
+def Not(x: LiteralConjunction) -> LiteralDisjunction: ...
+
+
+@overload
+def Not(x: LiteralDisjunction) -> LiteralConjunction: ...
+
+
+def Not(
+    x: Union[Predicate, LiftedAtom, GroundAtom, ForAll, Exists, LiteralConjunction, LiteralDisjunction],
+) -> Union[Predicate, LiftedAtom, GroundAtom, ForAll, Exists, LiteralConjunction, LiteralDisjunction]:
+    """Negate a Predicate, Atom, or other logical structure."""
+    if isinstance(x, Predicate):
+        return x.get_negation()
+
+    if isinstance(x, ForAll):
+        return ForAll(x.variables, x.body, is_negative=(not x.is_negative))
+
+    if isinstance(x, Exists):
+        return Exists(x.variables, x.body, is_negative=(not x.is_negative))
+
+    if isinstance(x, LiteralConjunction):
+        # Apply De Morgan's law: NOT(A AND B) = (NOT A) OR (NOT B)
+        negated_literals = []
+        for lit in x.literals:
+            negated_lit = Not(lit)
+            if isinstance(negated_lit, (LiftedAtom, GroundAtom)):
+                negated_literals.append(negated_lit)
+        return LiteralDisjunction(negated_literals)
+
+    if isinstance(x, LiteralDisjunction):
+        # Apply De Morgan's law: NOT(A OR B) = (NOT A) AND (NOT B)
+        negated_literals = []
+        for lit in x.literals:
+            negated_lit = Not(lit)
+            if isinstance(negated_lit, (LiftedAtom, GroundAtom)):
+                negated_literals.append(negated_lit)
+        return LiteralConjunction(negated_literals)
+
+    if isinstance(x, (LiftedAtom, GroundAtom)):
+        # Create a negated predicate and apply it to the same entities
+        negated_predicate = Not(x.predicate)
+        if isinstance(x, LiftedAtom):
+            return LiftedAtom(negated_predicate, x.variables)
+        else:  # GroundAtom
+            return GroundAtom(negated_predicate, x.objects)
+
+    raise ValueError(f"Cannot negate object of type {type(x)}")
+
+
+# Convenience higher-order types useful throughout the code
+State = Any
+ObjToVarSub = dict[Object, Variable]
+ObjToObjSub = dict[Object, Object]
+VarToObjSub = dict[Variable, Object]
+VarToVarSub = dict[Variable, Variable]
+LiftedOrGroundAtom = TypeVar("LiftedOrGroundAtom", LiftedAtom, GroundAtom, _Atom)
+ObjectOrVariable = TypeVar("ObjectOrVariable", bound=_TypedEntity)
+LiftedFormula = Union[
+    LiftedAtom,
+    LiteralConjunction,
+    LiteralDisjunction,
+    ForAll,
+    Exists,
+]
