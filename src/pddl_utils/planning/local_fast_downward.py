@@ -20,7 +20,7 @@ class LocalFastDownward(PDDLPlanner):
         super().__init__()
         dirname = os.path.dirname(os.path.realpath(__file__))
         self._exec = os.path.join(dirname, "FD/fast-downward.py")
-        _bin_exec = os.path.join(dirname, "FD/builds/release/downward")
+        _bin_exec = os.path.join(dirname, "FD/builds/release/bin/downward")
         print("Instantiating FD", end=" ")
         if alias_flag:
             print("with", alias_flag, end=" ")
