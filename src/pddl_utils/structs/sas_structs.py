@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 
 from pddl_utils.structs.pddl_structs import PDDLDomain
 from pddl_utils.structs.structs import Object
@@ -11,9 +12,6 @@ class SasAction:
 
     def __post_init__(self):
         object.__setattr__(self, "name", self.name.lower())
-
-    def __hash__(self):
-        return hash((self.name, tuple(self.args)))
 
     def validate(self, domain: PDDLDomain, objects: list[Object]) -> list[str]:
         """
@@ -46,6 +44,19 @@ class SasAction:
         """Create a PDDL action string"""
         return f"({self.name} {' '.join(self.args)})"
 
+    @cached_property
+    def _str(self) -> str:
+        return self.to_string()
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return self._str
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
 
 @dataclass(frozen=True, repr=False, eq=False)
 class SasPlan:
@@ -67,3 +78,16 @@ class SasPlan:
         Converts the SasPlan object to a string representation.
         """
         return "\n".join([action.to_string() for action in self.actions])
+
+    @cached_property
+    def _str(self) -> str:
+        return self.to_string()
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return self._str
+
+    def __hash__(self) -> int:
+        return hash(str(self))
