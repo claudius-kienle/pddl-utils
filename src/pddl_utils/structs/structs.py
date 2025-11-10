@@ -186,6 +186,7 @@ class Predicate:
 
     name: str
     types: Sequence[Type]
+    is_negated: bool = field(compare=False, default=False)
     # The classifier takes in a complete state and a sequence of objects
     # representing the arguments. These objects should be the only ones
     # treated "specially" by the classifier.
@@ -231,7 +232,7 @@ class Predicate:
         return self._classifier(state, objects)
 
     def __str__(self) -> str:
-        return self.name
+        return self.name if not self.is_negated else "NOT-" + self.name
 
     def __repr__(self) -> str:
         return str(self)
@@ -267,13 +268,9 @@ class Predicate:
         vars_str = " ".join(f"?x{i} - {t.name}" for i, t in enumerate(self.types))
         return f"({self.name} {vars_str})"
 
-    @property
-    def is_negated(self) -> bool:
-        return self.name.startswith("NOT-")
-
     def get_negation(self) -> Predicate:
         """Return a negated version of this predicate."""
-        return Predicate("NOT-" + self.name, self.types, self._negated_classifier)
+        return Predicate(self.name, self.types, is_negated=not self.is_negated, _classifier=self._negated_classifier)
 
     def _negated_classifier(self, state: State, objects: Sequence[Object]) -> bool:
         # Separate this into a named function for pickling reasons.
@@ -356,7 +353,7 @@ class LiftedAtom(_Atom):
     def _str(self) -> str:
         return str(self.predicate) + "(" + ", ".join(map(str, self.variables)) + ")"
 
-    def ground(self, sub: VarToObjSub, state: set[GroundAtom]) -> set[GroundAtom]:
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
         """Create a GroundAtom with a given substitution."""
         assert set(self.variables).issubset(set(sub.keys()))
         return {GroundAtom(self.predicate, [sub[v] for v in self.variables])}
@@ -414,7 +411,7 @@ class LiteralConjunction:
         literal_strs = [lit.pddl_str() for lit in self.literals]
         return f"(and {' '.join(literal_strs)})"
 
-    def ground(self, sub: VarToObjSub, state: set[GroundAtom]) -> set[GroundAtom]:
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
         """Ground the existential by substituting variables with objects."""
         assert set(self.exposed_variables).issubset(set(sub.keys()))
         grounded_literals = []
@@ -465,6 +462,10 @@ class LiteralDisjunction:
         literal_strs = [lit.pddl_str() for lit in self.literals]
         return f"(or {' '.join(literal_strs)})"
 
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+        """Ground the existential by substituting variables with objects."""
+        raise NotImplementedError()
+
     @cached_property
     def _str(self) -> str:
         return f"OR({', '.join(str(lit) for lit in self.literals)})"
@@ -503,6 +504,9 @@ class ForAll:
     def positive(self) -> ForAll:
         """Return the positive version of this ForAll."""
         return ForAll(self.variables, self.body, is_negative=False)
+
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+        raise NotImplementedError()
 
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL file."""
@@ -563,6 +567,9 @@ class Exists:
         if self.is_negative:
             return f"(not {exists_str})"
         return exists_str
+
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+        raise NotImplementedError()
 
     @cached_property
     def _str(self) -> str:
@@ -651,8 +658,8 @@ class Operator:
         """Get a string representation suitable for writing out to a PDDL
         file."""
         params_str = " ".join(f"{p.name} - {p.type.name}" for p in self.parameters)
-        preconds_str = "\n        ".join(atom.pddl_str() for atom in self.preconditions)
-        effects_str = "\n        ".join(atom.pddl_str() for atom in self.effects)
+        preconds_str = "\n        ".join(self.preconditions.pddl_str())
+        effects_str = "\n        ".join(self.effects.pddl_str())
         return f"""(:action {self.name}
     :parameters ({params_str})
     :precondition (and {preconds_str})

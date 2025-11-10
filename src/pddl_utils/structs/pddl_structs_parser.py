@@ -100,7 +100,7 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
                 # Split the init content into individual facts (handle parentheses properly)
                 facts_text = section_content
                 for fact_str in parentheses_groups(facts_text):
-                    fact_atom = parse_predicate(fact_str, only_variables=False, known_predicates=domain.predicates)
+                    fact_atom = parse_formula(fact_str, only_variables=False, known_predicates=domain.predicates)
                     assert isinstance(fact_atom, GroundAtom)
                     init_facts.add(fact_atom)
         elif section_type == ":goal":

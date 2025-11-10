@@ -6,8 +6,6 @@ Code copied from https://github.com/ronuchit/pddlgym_planners/blob/master/pddlgy
 import os
 import time
 import abc
-import subprocess
-import numpy as np
 
 
 class Planner:
@@ -16,7 +14,7 @@ class Planner:
     def __init__(self):
         self._statistics = {}
 
-    def plan_from_pddl(self, dom_file, prob_file, horizon=np.inf, timeout=10, remove_files=False):
+    def plan_from_pddl(self, dom_file, prob_file, horizon=float("inf"), timeout=10, remove_files=False):
         """PDDL-specific planning method."""
         start_time = time.time()
         output = self._run(dom_file, prob_file, timeout)

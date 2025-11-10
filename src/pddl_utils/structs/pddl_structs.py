@@ -63,6 +63,16 @@ class PDDLDomain:
         with open(fname, "w") as f:
             f.write(domain_str)
 
+    def parent_types(self, type: Type) -> list[Type]:
+        assert type in self.types
+        p_type = type.parent
+
+        all_types = [type]
+        if p_type is not None:
+            p_types = self.parent_types(p_type)
+            all_types.extend(p_types)
+        return all_types
+
     def _types_pddl_str(self):
         types_str = []
         for type in self.types:
@@ -81,7 +91,7 @@ class PDDLProblem:
     domain_name: str
     objects: set[Object]
     init: set[GroundAtom]
-    goal: LiteralConjunction | LiteralDisjunction | GroundAtom
+    goal: LiteralConjunction | GroundAtom
 
     def to_string(self):
         """Create PDDL problem string"""

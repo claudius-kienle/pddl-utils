@@ -1,8 +1,6 @@
 import logging
 import re
 from typing import Optional, Tuple
-from pddl.core import Formula, Problem, Domain
-from tp_lodge.utils.pddl_utils import get_constants_in_term, get_list_of_predicates
 
 
 logger = logging.getLogger(__name__)
@@ -25,19 +23,6 @@ class AIValidator:
             repair_advice = None
         return successful, repair_advice
 
-    def state_fulfills_goal(self, domain: Domain, state: Formula, goal: Formula) -> bool:
-        objects = set(get_constants_in_term(state)) | set(get_constants_in_term(goal))
-        problem = Problem(
-            name="test-problem",
-            objects=objects,
-            domain_name=domain.name,
-            init=get_list_of_predicates(state),
-            goal=goal,
-        )
-        response, success = self.validate(domain=str(domain), problem=str(problem), plan="", options="-v")
-
-        return "The goal is not satisfied" not in response and "Goal not satisfied" not in response
-
     def validate(
         self, domain: str, problem: Optional[str], plan: Optional[str], options: Optional[str]
     ) -> Tuple[str, bool]:
@@ -47,7 +32,6 @@ class AIValidator:
             if not failed_plan:
                 assert success
             success = success and not failed_plan
-
 
         if not success and "Plan Repair Advice" in response:
             # repair_advice = re.findall(r".*Plan Repair Advice:(.*)Failed plans:.*", response)

@@ -5,7 +5,7 @@ authors = [
     { name = "Claudius Kienle", email = "claudius.kienle@tu-darmstadt.de" },
 ]
 
-dependencies = ["numpy"]
+dependencies = ["python-utils"]
 
 [project.optional-dependencies]
 test = ["pytest>=6.0", "pytest-cov"]

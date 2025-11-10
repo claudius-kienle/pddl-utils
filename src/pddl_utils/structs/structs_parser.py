@@ -178,14 +178,14 @@ def parse_formula(
     only_variables: Literal[False] = False,
     known_predicates: Optional[set[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> Sequence[GroundAtom] | GroundAtom: ...
+) -> LiteralConjunction | GroundAtom: ...
 def parse_formula(
     formula_str: str,
     only_variables: bool = True,
     *,
     known_predicates: Optional[set[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> LiftedFormula | Sequence[GroundAtom] | GroundAtom:
+) -> LiftedFormula | LiteralConjunction | GroundAtom:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
