@@ -6,6 +6,7 @@ Code copied from https://github.com/ronuchit/pddlgym_planners/blob/master/pddlgy
 import os
 import time
 import abc
+from typing import Literal, Union, overload
 
 
 class Planner:
@@ -14,7 +15,29 @@ class Planner:
     def __init__(self):
         self._statistics = {}
 
-    def plan_from_pddl(self, dom_file, prob_file, horizon=float("inf"), timeout=10, remove_files=False):
+    @overload
+    def plan_from_pddl(
+        self,
+        dom_file: str,
+        prob_file: str,
+        horizon=float("inf"),
+        timeout: int = 10,
+        remove_files: bool = False,
+        return_output: Literal[True] = True,
+    ) -> tuple[list[str], str]: ...
+    @overload
+    def plan_from_pddl(
+        self,
+        dom_file: str,
+        prob_file: str,
+        horizon=float("inf"),
+        timeout: int = 10,
+        remove_files: bool = False,
+        return_output: Literal[False] = False,
+    ) -> list[str]: ...
+    def plan_from_pddl(
+        self, dom_file, prob_file, horizon=float("inf"), timeout=10, remove_files=False, return_output=False
+    ) -> Union[list[str], tuple[list[str], str]]:
         """PDDL-specific planning method."""
         start_time = time.time()
         output = self._run(dom_file, prob_file, timeout)
@@ -27,7 +50,11 @@ class Planner:
         pddl_plan = self._output_to_plan(output)
         if len(pddl_plan) > horizon:
             raise PlanningFailure("PDDL planning failed due to horizon")
-        return pddl_plan
+
+        if return_output:
+            return pddl_plan, output
+        else:
+            return pddl_plan
 
     @abc.abstractmethod
     def _run(self, dom_file, prob_file, timeout) -> str:
