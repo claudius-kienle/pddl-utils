@@ -1,8 +1,11 @@
+import logging
 import os
 import subprocess
 from typing import Optional
 
 from pddl_utils.validation.val import VAL
+
+logger = logging.getLogger(__name__)
 
 VAL_URL = "https://github.com/KCL-Planning/VAL.git"
 
@@ -14,8 +17,7 @@ class LocalVAL(VAL):
         super().__init__()
         dirname = os.path.dirname(os.path.realpath(__file__))
         self._exec = os.path.join(dirname, "VAL/validate")
-        print("Instantiating VAL", end=" ")
-        print()
+        logger.debug("Instantiating VAL")
         if not os.path.exists(self._exec):
             self._install_val()
 

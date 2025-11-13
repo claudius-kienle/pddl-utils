@@ -15,9 +15,9 @@ class DockerFastDownward(PDDLPlanner):
 
     def __init__(self, alias_flag="--alias seq-opt-lmcut"):
         super().__init__()
-        print("Instantiating FD", end=" ")
+        logger.debug("Instantiating FD")
         if alias_flag:
-            print("with", alias_flag, end=" ")
+            logger.debug("with %s", alias_flag)
         self.client = docker.from_env()
         self._alias_flag = alias_flag
 

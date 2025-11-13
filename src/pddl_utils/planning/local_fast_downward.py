@@ -4,11 +4,15 @@ http://www.fast-downward.org/ObtainingAndRunningFastDownward
 Code copied from https://github.com/ronuchit/pddlgym_planners/blob/master/pddlgym_planners/fd.py
 """
 
+import logging
 import os
 import sys
 import subprocess
 import tempfile
 from pddl_utils.planning.pddl_planner import PDDLPlanner
+
+
+logger = logging.getLogger(__name__)
 
 FD_URL = "https://github.com/aibasel/downward.git"
 
@@ -21,12 +25,11 @@ class LocalFastDownward(PDDLPlanner):
         dirname = os.path.dirname(os.path.realpath(__file__))
         self._exec = os.path.join(dirname, "FD/fast-downward.py")
         _bin_exec = os.path.join(dirname, "FD/builds/release/bin/downward")
-        print("Instantiating FD", end=" ")
+        logger.debug("Instantiating FD")
         if alias_flag:
-            print("with", alias_flag, end=" ")
+            logger.debug("with %s", alias_flag)
         if final_flags:
-            print("with", final_flags, end=" ")
-        print()
+            logger.debug("with %s", final_flags)
         self._alias_flag = alias_flag
         self._final_flags = final_flags
         if not os.path.exists(self._exec) or not os.path.exists(_bin_exec):
