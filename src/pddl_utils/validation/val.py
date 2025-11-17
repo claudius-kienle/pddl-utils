@@ -7,15 +7,19 @@ class VAL:
     """VAL validator"""
 
     def validate(self, dom_file: str, prob_file: Optional[str], plan_file: Optional[str], remove_files=False) -> tuple[bool, str]:
-        tmp_plan_file = NamedTemporaryFile(mode='w', delete=False)
-        tmp_plan_file.close()
         if plan_file is not None:
-            with open(plan_file, 'r') as f_in, open(tmp_plan_file.name, 'w') as f_out:
+            tmp_plan_f = NamedTemporaryFile(mode='w', delete=False)
+            tmp_plan_f .close()
+            with open(plan_file, 'r') as f_in, open(tmp_plan_f.name, 'w') as f_out:
                 for line in f_in:
                     if not line.strip().startswith(';') and line.strip() != '':
                         f_out.write(line)
-        success, output = self._validate(dom_file, prob_file, tmp_plan_file.name)
-        os.remove(tmp_plan_file.name)
+            tmp_plan_file = tmp_plan_f.name
+        else:
+            tmp_plan_file = None
+        success, output = self._validate(dom_file, prob_file, tmp_plan_file)
+        if tmp_plan_file is not None:
+            os.remove(tmp_plan_file)
         if remove_files:
             os.remove(dom_file)
             if prob_file is not None:
