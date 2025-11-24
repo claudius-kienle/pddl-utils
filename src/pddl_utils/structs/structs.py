@@ -295,9 +295,15 @@ class _Atom:
     def __post_init__(self) -> None:
         if isinstance(self.entities, _TypedEntity):
             raise ValueError("Atoms expect a sequence of entities, not a " "single entity.")
-        assert len(self.entities) == self.predicate.arity
+        if len(self.entities) != self.predicate.arity:
+            raise ValueError(
+                f"Syntax error: Predicate {predicate.name} must have {predicate.arity} arguments. Found: {len(ground_atom.objects)}"
+            )
         for ent, pred_type in zip(self.entities, self.predicate.types):
-            assert ent.is_instance(pred_type)
+            if not ent.is_instance(pred_type):
+                raise ValueError(
+                    f"Syntax error: Predicate {predicate.name} must have argument {known_arg.name} of type {known_arg}. Found: {obj.type}"
+                )
 
     @property
     def _str(self) -> str:
@@ -319,7 +325,10 @@ class _Atom:
         if not self.entities:
             return f"({self.predicate.name})"
         entities_str = " ".join(e.name for e in self.entities)
-        return f"({self.predicate.name} {entities_str})"
+        pddl_str = f"({self.predicate.name} {entities_str})"
+        if self.predicate.is_negated:
+            pddl_str = f"(not {pddl_str})"
+        return pddl_str
 
     def __hash__(self) -> int:
         return self._hash
@@ -407,7 +416,7 @@ class LiteralConjunction:
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL file."""
         if len(self.literals) == 1:
-            return self.literals[0].pddl_str()
+            return list(self.literals)[0].pddl_str()
         literal_strs = [lit.pddl_str() for lit in self.literals]
         return f"(and {' '.join(literal_strs)})"
 

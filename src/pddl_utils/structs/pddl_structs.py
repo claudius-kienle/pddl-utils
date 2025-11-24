@@ -93,9 +93,27 @@ class PDDLProblem:
     init: set[GroundAtom]
     goal: LiteralConjunction | GroundAtom
 
+    def __post_init__(self):
+        if isinstance(self.goal, LiteralConjunction):
+            assert all(isinstance(lit, GroundAtom) for lit in self.goal.literals)
+        elif isinstance(self.goal, GroundAtom):
+            pass
+        elif self.goal is not None:
+            raise ValueError("Goal must be a GroundAtom or LiteralConjunction.")
+
+    @property
+    def goal_list(self) -> set[GroundAtom]:
+        if self.goal is None:
+            return set()
+        elif isinstance(self.goal, LiteralConjunction):
+            assert all(isinstance(lit, GroundAtom) for lit in self.goal.literals)
+            return self.goal.literals
+        else:
+            return {self.goal}
+
     def to_string(self):
         """Create PDDL problem string"""
-        objects_str = self._objects_pddl_str()
+        objects_str = self.objects_pddl_str()
 
         init_str = "\n\t".join([atom.pddl_str() for atom in sorted(self.init, key=str)])
         goal_str = self.goal.pddl_str()
@@ -120,7 +138,7 @@ class PDDLProblem:
         with open(fname, "w") as f:
             f.write(problem_str)
 
-    def _objects_pddl_str(self):
+    def objects_pddl_str(self):
         """Create PDDL string for objects grouped by type."""
         objects_strs = []
         for obs in self.objects:

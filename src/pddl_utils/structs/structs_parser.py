@@ -95,17 +95,33 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-@overload
-def parse_predicate(
-    predicate_str: str, *, only_variables: Literal[True], known_predicates: Optional[set[Predicate]] = None
-) -> LiftedAtom: ...
-@overload
-def parse_predicate(
-    predicate_str: str, *, only_variables: Literal[False], known_predicates: Optional[set[Predicate]] = None
-) -> GroundAtom: ...
-def parse_predicate(
-    predicate_str: str, *, only_variables: bool = True, known_predicates: Optional[set[Predicate]] = None
-) -> LiftedAtom | GroundAtom:
+def parse_ground_atom(ground_atom_str: str, *, known_predicates: set[Predicate]) -> GroundAtom:
+    assert ground_atom_str[0] == "(" and ground_atom_str[-1] == ")", "The predicate must start and end with parentheses"
+    assert (
+        ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
+    ), f"Invalid syntax: '{str(ground_atom_str)}' is not a valid predicate. Maybe you forgot an operator?"
+
+    matches = re.match(rf"\(({name_rgx}) *(?: +([\w\W]+))?\)", ground_atom_str)
+    if matches is None:
+        raise ValueError(
+            "Syntax error: Invalid predicate definition %s (expecting ({pred_name} {pred_args..}))" % ground_atom_str
+        )
+    predicate_name = matches.group(1)
+    predicate_args = matches.group(2)
+    if predicate_args is None:
+        predicate_args = []
+    else:
+        predicate_args = [arg.strip() for arg in predicate_args.split()]
+
+    predicate = next((p for p in known_predicates if p.name == predicate_name), None)
+    if predicate is None:
+        raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
+
+    objects = [parse_object(a, t) for a, t in zip(predicate_args, predicate.types)]
+    return GroundAtom(predicate, objects)
+
+
+def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> LiftedAtom:
     assert predicate_str[0] == "(" and predicate_str[-1] == ")", "The predicate must start and end with parentheses"
     assert (
         predicate_str.count("(") == 1 and predicate_str.count(")") == 1
@@ -122,7 +138,7 @@ def parse_predicate(
         predicate_args = []
     else:
         predicate_args = re.findall(rf"\??{name_rgx}(?: \- {name_rgx})?", predicate_args)
-        if only_variables and any(arg[0] != "?" for arg in predicate_args):
+        if any(arg[0] != "?" for arg in predicate_args):
             raise ValueError(
                 f"Syntax error: Predicate arguments of {predicate_name} must be variables. Found: {predicate_args}"
             )
@@ -133,34 +149,10 @@ def parse_predicate(
     known_predicates_by_name = {p.name: p for p in known_predicates} if known_predicates else {}
     predicate = known_predicates_by_name.get(predicate_name)
     existing_types = predicate.types if predicate else [None for _ in range(len(predicate_args))]
-    if only_variables:
-        variables = [parse_variable(a, t) for a, t in zip(predicate_args, existing_types)]
-        if predicate is None:
-            predicate = Predicate(predicate_name, [var.type for var in variables])
-        new_atom = LiftedAtom(predicate, variables)
-    else:
-        objects = [parse_object(a, t) for a, t in zip(predicate_args, existing_types)]
-        if predicate is None:
-            predicate = Predicate(predicate_name, [obj.type for obj in objects])
-        new_atom = GroundAtom(predicate, objects)
-
-    if known_predicates is not None:
-        # check if the predicate is already known
-        for known_predicate in known_predicates:
-            if predicate.name == known_predicate.name:
-                if predicate.arity != known_predicate.arity:
-                    raise ValueError(
-                        f"Syntax error: Predicate {predicate_name} must have {known_predicate.arity} arguments. Found: {predicate.arity}"
-                    )
-
-                # check if the types of the arguments are correct
-                for new_arg, known_arg in zip(predicate.types, known_predicate.types):
-                    if new_arg != known_arg:
-                        raise ValueError(
-                            f"Syntax error: Predicate {predicate_name} must have argument {known_arg.name} of type {known_arg}. Found: {new_arg}"
-                        )
-
-    return new_atom
+    variables = [parse_variable(a, t) for a, t in zip(predicate_args, existing_types)]
+    if predicate is None:
+        predicate = Predicate(predicate_name, [var.type for var in variables])
+    return LiftedAtom(predicate, variables)
 
 
 @overload
@@ -178,14 +170,14 @@ def parse_formula(
     only_variables: Literal[False] = False,
     known_predicates: Optional[set[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> LiteralConjunction | GroundAtom: ...
+) -> set[GroundAtom]: ...
 def parse_formula(
     formula_str: str,
     only_variables: bool = True,
     *,
     known_predicates: Optional[set[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> LiftedFormula | LiteralConjunction | GroundAtom:
+) -> LiftedFormula | LiteralConjunction | set[GroundAtom]:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
@@ -236,7 +228,10 @@ def parse_formula(
         except AssertionError:
             raise ValueError(f"Syntax error: {formula_content} is not a valid formula")
         if formula_name == "and":
-            return LiteralConjunction(terms)
+            if only_variables:
+                return LiteralConjunction(terms)
+            else:
+                return set(t for ts in terms for t in ts)
         elif formula_name == "or":
             return LiteralDisjunction(terms)
         elif formula_name == "not":
@@ -245,6 +240,8 @@ def parse_formula(
             term = terms[0]
             # if isinstance(term, ExistsCondition):
             #     raise ValueError(f"Syntax error: Not operator must not be used with quantifiers: {formula_str}")
+            if isinstance(term, set):
+                return {Not(t) for t in term}
             return Not(term)
         elif formula_name == "when":
             raise NotImplementedError()
@@ -259,7 +256,12 @@ def parse_formula(
             # raise NotImplementedError(str(formula_str))
     else:
         # predicate
-        return parse_predicate(formula_str, only_variables=only_variables, known_predicates=known_predicates)
+        if only_variables:
+            return parse_predicate(formula_str, known_predicates=known_predicates)
+        else:
+            assert known_predicates is not None
+            atom = parse_ground_atom(formula_str, known_predicates=known_predicates)
+            return {atom}
 
 
 def parse_operator(

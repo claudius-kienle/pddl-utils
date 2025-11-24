@@ -7,6 +7,7 @@ from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 from pddl_utils.structs.string_utils import parentheses_groups, until_next_closing_parenthesis
 from pddl_utils.structs.structs_parser import (
     parse_formula,
+    parse_ground_atom,
     parse_objects,
     parse_operator,
     parse_predicate,
@@ -100,8 +101,7 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
                 # Split the init content into individual facts (handle parentheses properly)
                 facts_text = section_content
                 for fact_str in parentheses_groups(facts_text):
-                    fact_atom = parse_formula(fact_str, only_variables=False, known_predicates=domain.predicates)
-                    assert isinstance(fact_atom, GroundAtom)
+                    fact_atom = parse_ground_atom(fact_str, known_predicates=domain.predicates)
                     init_facts.add(fact_atom)
         elif section_type == ":goal":
             # Parse goal condition

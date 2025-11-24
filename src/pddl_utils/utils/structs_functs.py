@@ -59,3 +59,45 @@ def abstract_state(
 
             state.add(GroundAtom(s_pred, objs))
     return state
+
+
+def filter_state(
+    state: set[GroundAtom], known_predicates: list[str] | None, *, inverse: bool = False
+) -> set[GroundAtom]:
+    if known_predicates is None:
+        # we actually don't want to filter anything
+        if inverse:
+            return set()
+        else:
+            return state
+
+    filtered_state = set()
+    for atom in state:
+        assert isinstance(atom, GroundAtom)
+        if (inverse and atom.predicate.name not in known_predicates) or (
+            not inverse and atom.predicate.name in known_predicates
+        ):
+            filtered_state.add(atom)
+    return filtered_state
+
+
+def filter_valid_state(state: set[GroundAtom]) -> set[GroundAtom]:
+    filtered_state = set()
+    for atom in state:
+        assert isinstance(atom, GroundAtom)
+        if atom.predicate.is_negated:
+            continue
+        filtered_state.add(atom)
+    return filtered_state
+
+
+def state_to_str(state: set[GroundAtom], *, separator: str = " ") -> str:
+    return separator.join([atom.pddl_str() for atom in state])
+
+
+def get_objects_in_state(state: set[GroundAtom]) -> set[Object]:
+    objects = set()
+    for atom in state:
+        for obj in atom.objects:
+            objects.add(obj)
+    return objects
