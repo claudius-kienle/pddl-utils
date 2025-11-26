@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, MISSING
 from enum import Enum
 from functools import cached_property, lru_cache
 from typing import (
@@ -88,6 +88,9 @@ class Type:
     feature_names: Sequence[str] = field(repr=False, default_factory=list)
     parent: Optional[Type] = field(default=None, repr=False)
 
+    def __post_init__(self):
+        assert isinstance(self.name, str)
+
     @property
     def dim(self) -> int:
         """Dimensionality of the feature vector of this object type."""
@@ -140,6 +143,11 @@ class _TypedEntity:
 
     def __repr__(self) -> str:
         return self._str
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL
+        file."""
+        return f"{self.name} - {self.type.name}"
 
     def is_instance(self, t: Type) -> bool:
         """Return whether this entity is an instance of the given type, taking
@@ -249,8 +257,8 @@ class Predicate:
         # This is a known predicate, not from the predicate grammar.
         vars_str = ", ".join(
             # f"{CFG.grammar_search_classifier_pretty_str_names[i]}:{t.name}"
-            f"{i}:{t.name}"
-            for i, t in enumerate(self.types)
+            f"{arg.name}:{arg.type.name}"
+            for arg in self.args
         )
         vars_str_no_types = ", ".join(
             # f"{CFG.grammar_search_classifier_pretty_str_names[i]}"
@@ -279,6 +287,39 @@ class Predicate:
 
     def __lt__(self, other: Predicate) -> bool:
         return str(self) < str(other)
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class NamedPredicate(Predicate):
+    variables: Sequence[Variable] = field(kw_only=True)
+    types: Sequence[Type] = field(init=False)
+
+    def __hash__(self) -> int:
+        return super().__hash__()
+
+    @property
+    def types(self) -> Sequence[Type]:
+        return [var.type for var in self.variables]
+
+    @types.setter
+    def types(self, value: Sequence[Type]) -> None:
+        pass
+
+    def pddl_str(self) -> str:
+        """Get a string representation suitable for writing out to a PDDL
+        file."""
+        if self.arity == 0:
+            return f"({self.name})"
+        vars_str = " ".join(f"{var.name} - {var.type.name}" for var in self.variables)
+        return f"({self.name} {vars_str})"
+
+    def get_negation(self) -> NamedPredicate:
+        return NamedPredicate(
+            name=self.name,
+            variables=self.variables,
+            is_negated=not self.is_negated,
+            _classifier=self._negated_classifier,
+        )
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -630,6 +671,10 @@ class Operator:
             raise ValueError(
                 f"Syntax error: Action {self.name} has undeclared variables in effect: {remaining_effect_vars}"
             )
+        if len(self.effects.exposed_variables) == 0:
+            raise ValueError(
+                f"Action `{action.name}` has no effects. Every action must have at least one effect. If necessary, define new predicates."
+            )
 
     @lru_cache(maxsize=None)
     def ground(self, objects: tuple[Object], state: frozenset[GroundAtom]) -> GroundOperator:
@@ -667,12 +712,12 @@ class Operator:
         """Get a string representation suitable for writing out to a PDDL
         file."""
         params_str = " ".join(f"{p.name} - {p.type.name}" for p in self.parameters)
-        preconds_str = "\n        ".join(self.preconditions.pddl_str())
-        effects_str = "\n        ".join(self.effects.pddl_str())
+        preconds_str = "\n        ".join(self.preconditions.pddl_str().splitlines())
+        effects_str = "\n        ".join(self.effects.pddl_str().splitlines())
         return f"""(:action {self.name}
     :parameters ({params_str})
-    :precondition (and {preconds_str})
-    :effect (and {effects_str})
+    :precondition {preconds_str}
+    :effect {effects_str}
   )"""
 
     def __hash__(self) -> int:

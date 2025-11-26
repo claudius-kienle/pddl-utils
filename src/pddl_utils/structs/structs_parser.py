@@ -5,6 +5,7 @@ from pddl_utils.structs.structs import (
     ForAll,
     GroundAtom,
     LiftedAtom,
+    NamedPredicate,
     LiftedFormula,
     LiteralConjunction,
     LiteralDisjunction,
@@ -20,7 +21,7 @@ from python_utils.string_utils import remove_comments
 
 from pddl_utils.structs.string_utils import until_next_closing_parenthesis, parentheses_groups
 
-name_rgx = r"[a-zA-Z0-9-]+"
+name_rgx = r"[a-zA-Z0-9-_]+"
 
 
 def parse_type(type_str: str) -> Type:
@@ -95,7 +96,13 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-def parse_ground_atom(ground_atom_str: str, *, known_predicates: set[Predicate]) -> GroundAtom:
+def parse_ground_atom(ground_atom_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> GroundAtom:
+    atom = parse_formula(ground_atom_str, only_variables=False, known_predicates=known_predicates)
+    assert isinstance(atom, set) and len(atom) == 1
+    return next(iter(atom))
+
+
+def _parse_ground_atom(ground_atom_str: str, *, known_predicates: set[NamedPredicate]) -> GroundAtom:
     assert ground_atom_str[0] == "(" and ground_atom_str[-1] == ")", "The predicate must start and end with parentheses"
     assert (
         ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
@@ -121,7 +128,7 @@ def parse_ground_atom(ground_atom_str: str, *, known_predicates: set[Predicate])
     return GroundAtom(predicate, objects)
 
 
-def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> LiftedAtom:
+def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> NamedPredicate:
     assert predicate_str[0] == "(" and predicate_str[-1] == ")", "The predicate must start and end with parentheses"
     assert (
         predicate_str.count("(") == 1 and predicate_str.count(")") == 1
@@ -148,11 +155,21 @@ def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predic
 
     known_predicates_by_name = {p.name: p for p in known_predicates} if known_predicates else {}
     predicate = known_predicates_by_name.get(predicate_name)
+    if predicate is None and "-" not in predicate_str:
+        raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
     existing_types = predicate.types if predicate else [None for _ in range(len(predicate_args))]
     variables = [parse_variable(a, t) for a, t in zip(predicate_args, existing_types)]
-    if predicate is None:
-        predicate = Predicate(predicate_name, [var.type for var in variables])
-    return LiftedAtom(predicate, variables)
+    return NamedPredicate(name=predicate_name, variables=variables)
+
+
+def parse_lifted_atom(lifted_atom_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> LiftedAtom:
+    predicate = parse_predicate(lifted_atom_str, known_predicates=known_predicates)
+    return LiftedAtom(
+        Predicate(
+            predicate.name, types=predicate.types, is_negated=predicate.is_negated, _classifier=predicate._classifier
+        ),
+        predicate.variables,
+    )
 
 
 @overload
@@ -213,7 +230,6 @@ def parse_formula(
             return EqualTo(*terms)
 
         try:
-            terms_str = list(parentheses_groups(formula_content.strip()))
             terms = list(
                 map(
                     lambda t: parse_formula(
@@ -222,7 +238,7 @@ def parse_formula(
                         known_predicates=known_predicates,
                         unsupported_formulas=unsupported_formulas,
                     ),
-                    terms_str,
+                    parentheses_groups(formula_content.strip()) if formula_content is not None else [],
                 )
             )
         except AssertionError:
@@ -257,10 +273,10 @@ def parse_formula(
     else:
         # predicate
         if only_variables:
-            return parse_predicate(formula_str, known_predicates=known_predicates)
+            return parse_lifted_atom(formula_str, known_predicates=known_predicates)
         else:
             assert known_predicates is not None
-            atom = parse_ground_atom(formula_str, known_predicates=known_predicates)
+            atom = _parse_ground_atom(formula_str, known_predicates=known_predicates)
             return {atom}
 
 

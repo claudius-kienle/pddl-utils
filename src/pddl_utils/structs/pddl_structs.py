@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from pddl_utils.structs.structs import (
     Operator,
-    Predicate,
+    NamedPredicate,
     Type,
     Object,
     GroundAtom,
@@ -17,13 +17,16 @@ class PDDLDomain:
 
     domain_name: str
     types: set[Type]
-    predicates: set[Predicate]
+    predicates: set[NamedPredicate]
     operators: set[Operator]
+
+    def __post_init__(self):
+        assert all(not p.is_negated for p in self.predicates)
 
     def to_string(self):
         """Create PDDL string"""
         predicates = "\n\t".join([lit.pddl_str() for lit in self.predicates])
-        operators = "\n\t".join([op.pddl_str() for op in self.operators])
+        operators = "\n".join([op.pddl_str() for op in self.operators])
         constants = ""
         requirements = ":typing"
         if "=" in self.predicates:
@@ -34,7 +37,8 @@ class PDDLDomain:
   (:requirements {})
   (:types {})
   {}
-  (:predicates {}
+  (:predicates 
+\t{}
   )
 
   {}
@@ -81,6 +85,14 @@ class PDDLDomain:
             else:
                 types_str.append("{}".format(type.name))
         return " ".join(types_str)
+
+    def copy_with(self, domain_name=None, types=None, predicates=None, operators=None):
+        return PDDLDomain(
+            domain_name=domain_name if domain_name is not None else self.domain_name,
+            types=types if types is not None else self.types,
+            predicates=predicates if predicates is not None else self.predicates,
+            operators=operators if operators is not None else self.operators,
+        )
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -144,3 +156,32 @@ class PDDLProblem:
         for obs in self.objects:
             objects_strs.append(f"{obs.name} - {obs.type.name}")
         return " ".join(objects_strs)
+
+    def copy_with(
+        self,
+        problem_name: str =None,
+        domain_name: str =None,
+        objects: set[Object] =None,
+        init: set[GroundAtom] =None,
+        goal: LiteralConjunction | GroundAtom =None,
+    ):
+        return PDDLProblem(
+            problem_name=problem_name if problem_name is not None else self.problem_name,
+            domain_name=domain_name if domain_name is not None else self.domain_name,
+            objects=objects if objects is not None else self.objects,
+            init=init if init is not None else self.init,
+            goal=goal if goal is not None else self.goal,
+        )
+
+
+def adl_requirements() -> list[str]:
+    return [
+        ":disjunctive-preconditions",
+        ":typing",
+        ":strips",
+        ":existential-preconditions",
+        ":universal-preconditions",
+        ":equality",
+        ":negative-preconditions",
+        ":conditional-effects",
+    ]

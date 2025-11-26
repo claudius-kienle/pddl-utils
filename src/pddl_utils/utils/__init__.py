@@ -6,6 +6,7 @@ from .structs_functs import (
     filter_state,
     filter_valid_state,
     state_to_str,
+    get_predicates_in_state,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "filter_state",
     "filter_valid_state",
     "state_to_str",
+    "get_predicates_in_state",
 ]

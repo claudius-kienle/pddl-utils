@@ -1,17 +1,16 @@
 import re
 from typing import Sequence
-from pddl_utils.structs.structs import GroundAtom, LiftedAtom, Object, Operator, Predicate
+from pddl_utils.structs.structs import LiftedAtom, Object, Operator, Predicate
 from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 
 
-from pddl_utils.structs.string_utils import parentheses_groups, until_next_closing_parenthesis
+from pddl_utils.structs.string_utils import parentheses_groups
 from pddl_utils.structs.structs_parser import (
     parse_formula,
     parse_ground_atom,
     parse_objects,
     parse_operator,
     parse_predicate,
-    parse_type,
     parse_types,
     name_rgx,
 )

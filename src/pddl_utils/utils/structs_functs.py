@@ -101,3 +101,10 @@ def get_objects_in_state(state: set[GroundAtom]) -> set[Object]:
         for obj in atom.objects:
             objects.add(obj)
     return objects
+
+
+def get_predicates_in_state(state: set[GroundAtom]) -> set[Predicate]:
+    predicates = set()
+    for atom in state:
+        predicates.add(atom.predicate)
+    return predicates
