@@ -108,3 +108,15 @@ def get_predicates_in_state(state: set[GroundAtom]) -> set[Predicate]:
     for atom in state:
         predicates.add(atom.predicate)
     return predicates
+
+def remove_types_from_domain(domain_str: str) -> str:
+    """Remove types from the domain."""
+    while True:
+        match = re.search(r"(\?\w+) \- \w+", domain_str)
+        if match is None:
+            break
+        domain_str = domain_str[: match.start()] + match.group(1) + domain_str[match.end() :]
+
+    domain_str = re.sub(r"\(:types [\w\W]+?\)*(\((?::constants|:predicates|:functions|:derived))", r"\1", domain_str)
+
+    return domain_str

@@ -396,6 +396,10 @@ class LiftedAtom(_Atom):
         return [cast(Variable, ent) for ent in self.entities]
 
     @cached_property
+    def used_predicates(self) -> set[Predicate]:
+        return {self.predicate}
+
+    @cached_property
     def exposed_variables(self) -> set[Variable]:
         return set(self.variables)
 
@@ -445,6 +449,10 @@ class LiteralConjunction:
     """A logical conjunction (AND) of Literals."""
 
     literals: Sequence[LiftedFormula]
+
+    @cached_property
+    def used_predicates(self) -> set[Predicate]:
+        return {p for lit in self.literals for p in lit.used_predicates}
 
     @cached_property
     def exposed_variables(self) -> set[Variable]:
@@ -498,6 +506,10 @@ class LiteralDisjunction:
     literals: Sequence[LiftedFormula]
 
     @cached_property
+    def used_predicates(self) -> set[Predicate]:
+        return {p for lit in self.literals for p in lit.used_predicates}
+
+    @cached_property
     def exposed_variables(self) -> set[Variable]:
         """Get all variables from the literals."""
         variables = set()
@@ -545,6 +557,10 @@ class ForAll:
     variables: Sequence[Variable]
     body: LiftedFormula
     is_negative: bool = False
+
+    @cached_property
+    def used_predicates(self) -> set[Predicate]:
+        return self.body.used_predicates
 
     @cached_property
     def exposed_variables(self) -> set[Variable]:
@@ -599,6 +615,10 @@ class Exists:
     variables: Sequence[Variable]
     body: LiftedFormula
     is_negative: bool = False
+
+    @cached_property
+    def used_predicates(self) -> set[Predicate]:
+        return self.body.used_predicates
 
     @cached_property
     def exposed_variables(self) -> set[Variable]:
@@ -673,7 +693,7 @@ class Operator:
             )
         if len(self.effects.exposed_variables) == 0:
             raise ValueError(
-                f"Action `{action.name}` has no effects. Every action must have at least one effect. If necessary, define new predicates."
+                f"Action `{self.name}` has no effects. Every action must have at least one effect. If necessary, define new predicates."
             )
 
     @lru_cache(maxsize=None)
