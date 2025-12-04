@@ -1,12 +1,24 @@
 # Planning
 from .planning.local_fast_downward import LocalFastDownward
-from .planning.docker_fast_downward import DockerFastDownward
 from .planning.planner import Planner, PlanningFailure, PlanningTimeout
 from .planning.pddl_planner import PDDLPlanner
 
 # Validation
 from .validation.local_val import LocalVAL
-from .validation.docker_val import DockerVAL
+
+found_docker = False
+try:
+    import docker  # type: ignore
+    found_docker = True
+except ImportError:
+    pass
+
+if found_docker:
+    try:
+        from .planning.docker_fast_downward import DockerFastDownward
+        from .validation.docker_val import DockerVAL
+    except ImportError:
+        pass
 from .validation.val import VAL
 from .validation.ai_validator import AIValidator
 

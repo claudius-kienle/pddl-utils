@@ -1,6 +1,6 @@
 import re
 from typing import Sequence
-from pddl_utils.structs.structs import LiftedAtom, Object, Operator, Predicate
+from pddl_utils.structs.structs import Object, Operator, Predicate, LiteralConjunction
 from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 
 
@@ -41,12 +41,10 @@ def parse_domain(domain_str: str):
             types = parse_types(section_content)
         elif section_type == ":predicates":
             for pred_str in parentheses_groups(section_content):
-                lifted_atom = parse_predicate(pred_str, only_variables=True)
-                assert isinstance(lifted_atom, LiftedAtom)
-                predicates.add(lifted_atom.predicate)
+                predicates.add(parse_predicate(pred_str))
         elif section_type == ":action":
             assert len(predicates) > 0
-            operators.append(parse_operator(next_group, known_predicates=predicates))
+            operators.append(parse_operator(next_group, known_predicates=frozenset(predicates)))
         elif section_type == ":constants":
             raise ValueError(
                 f"Syntax error: Global constants are not supported in the domain definition. Rather use variables."
@@ -100,12 +98,13 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
                 # Split the init content into individual facts (handle parentheses properly)
                 facts_text = section_content
                 for fact_str in parentheses_groups(facts_text):
-                    fact_atom = parse_ground_atom(fact_str, known_predicates=domain.predicates)
+                    fact_atom = parse_ground_atom(fact_str, known_predicates=frozenset(domain.predicates))
                     init_facts.add(fact_atom)
         elif section_type == ":goal":
             # Parse goal condition
             if section_content.strip():
-                goal = parse_formula(section_content, only_variables=False, known_predicates=domain.predicates)
+                goal = parse_formula(section_content, only_variables=False, known_predicates=frozenset(domain.predicates))
+                goal = LiteralConjunction(literals=goal)
 
     # Validate required fields
     if domain_name is None:

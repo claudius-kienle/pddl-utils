@@ -96,13 +96,13 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-def parse_ground_atom(ground_atom_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> GroundAtom:
+def parse_ground_atom(ground_atom_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> GroundAtom:
     atom = parse_formula(ground_atom_str, only_variables=False, known_predicates=known_predicates)
     assert isinstance(atom, set) and len(atom) == 1
     return next(iter(atom))
 
 
-def _parse_ground_atom(ground_atom_str: str, *, known_predicates: set[NamedPredicate]) -> GroundAtom:
+def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
     assert ground_atom_str[0] == "(" and ground_atom_str[-1] == ")", "The predicate must start and end with parentheses"
     assert (
         ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
@@ -128,7 +128,7 @@ def _parse_ground_atom(ground_atom_str: str, *, known_predicates: set[NamedPredi
     return GroundAtom(predicate, objects)
 
 
-def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> NamedPredicate:
+def parse_predicate(predicate_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> NamedPredicate:
     assert predicate_str[0] == "(" and predicate_str[-1] == ")", "The predicate must start and end with parentheses"
     assert (
         predicate_str.count("(") == 1 and predicate_str.count(")") == 1
@@ -155,14 +155,14 @@ def parse_predicate(predicate_str: str, *, known_predicates: Optional[set[Predic
 
     known_predicates_by_name = {p.name: p for p in known_predicates} if known_predicates else {}
     predicate = known_predicates_by_name.get(predicate_name)
-    if predicate is None and "-" not in predicate_str:
+    if predicate is None and (len(predicate_args) > 0 and "-" not in predicate_str):
         raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
     existing_types = predicate.types if predicate else [None for _ in range(len(predicate_args))]
     variables = [parse_variable(a, t) for a, t in zip(predicate_args, existing_types)]
     return NamedPredicate(name=predicate_name, variables=variables)
 
 
-def parse_lifted_atom(lifted_atom_str: str, *, known_predicates: Optional[set[Predicate]] = None) -> LiftedAtom:
+def parse_lifted_atom(lifted_atom_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> LiftedAtom:
     predicate = parse_predicate(lifted_atom_str, known_predicates=known_predicates)
     return LiftedAtom(
         Predicate(
@@ -177,7 +177,7 @@ def parse_formula(
     formula_str: str,
     *,
     only_variables: Literal[True] = True,
-    known_predicates: Optional[set[Predicate]] = None,
+    known_predicates: Optional[frozenset[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
 ) -> LiftedFormula: ...
 @overload
@@ -185,14 +185,14 @@ def parse_formula(
     formula_str: str,
     *,
     only_variables: Literal[False] = False,
-    known_predicates: Optional[set[Predicate]] = None,
+    known_predicates: Optional[frozenset[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
 ) -> set[GroundAtom]: ...
 def parse_formula(
     formula_str: str,
     only_variables: bool = True,
     *,
-    known_predicates: Optional[set[Predicate]] = None,
+    known_predicates: Optional[frozenset[Predicate]] = None,
     unsupported_formulas: Optional[list[str]] = None,
 ) -> LiftedFormula | LiteralConjunction | set[GroundAtom]:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
@@ -249,6 +249,7 @@ def parse_formula(
             else:
                 return set(t for ts in terms for t in ts)
         elif formula_name == "or":
+            assert only_variables
             return LiteralDisjunction(terms)
         elif formula_name == "not":
             if len(terms) != 1:
@@ -260,12 +261,15 @@ def parse_formula(
                 return {Not(t) for t in term}
             return Not(term)
         elif formula_name == "when":
+            assert only_variables
             raise NotImplementedError()
             return When(condition=terms[0], effect=terms[1])
         elif formula_name == "imply":
+            assert only_variables
             raise NotImplementedError()
             return Imply(*terms)
         elif formula_name in ["if", "implies"]:
+            assert only_variables
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
         else:
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
@@ -281,7 +285,7 @@ def parse_formula(
 
 
 def parse_operator(
-    operator_str: str, *, previous_action: Optional[Operator] = None, known_predicates: Optional[set[Predicate]] = None
+    operator_str: str, *, previous_action: Optional[Operator] = None, known_predicates: Optional[frozenset[Predicate]] = None
 ):
     operator_str = remove_comments(operator_str)
     matches = re.match(rf"\(:action ({name_rgx})([\w\W]+)\)", operator_str.strip())
