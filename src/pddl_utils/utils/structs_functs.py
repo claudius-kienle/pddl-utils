@@ -1,4 +1,5 @@
 from itertools import product
+import re
 from typing import Callable, Generator, Sequence, TypeVar
 import numpy as np
 from pddl_utils.structs.structs import GroundAtom, GroundOperator, Object, Operator, Predicate, VarToObjSub, Variable
@@ -13,7 +14,7 @@ def transition(curr_state: set[GroundAtom], effect: set[GroundAtom]) -> set[Grou
     return new_state
 
 
-def get_substitutions(variables: Sequence[Variable], objects: set[Object]) -> Generator[VarToObjSub, None, None]:
+def get_substitutions(variables: Sequence[Variable], objects: frozenset[Object]) -> Generator[VarToObjSub, None, None]:
     ll_objects_per_arg = [[obj for obj in objects if obj.type == var.type] for var in variables]
     for args in product(*ll_objects_per_arg):
         substitution = {}
@@ -23,7 +24,7 @@ def get_substitutions(variables: Sequence[Variable], objects: set[Object]) -> Ge
 
 
 def sample_ground_operator(
-    objects: set[Object], sym_state: set[GroundAtom], operator: Operator
+    objects: frozenset[Object], sym_state: set[GroundAtom], operator: Operator
 ) -> Generator[GroundOperator, None, None]:
     for sub in get_substitutions(operator.parameters, objects):
         ground_op = operator.ground(tuple(sub[v] for v in operator.parameters), frozenset(sym_state))
@@ -38,7 +39,7 @@ T = TypeVar("T")
 
 
 def abstract_state(
-    predicates: set[Predicate], objects: set[Object], x: T, classifier: Callable[[GroundAtom, T], np.ndarray]
+    predicates: set[Predicate], objects: frozenset[Object], x: T, classifier: Callable[[GroundAtom, T], np.ndarray]
 ) -> set[GroundAtom]:
     state = set()
     for pred in predicates:

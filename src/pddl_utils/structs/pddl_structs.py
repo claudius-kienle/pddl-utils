@@ -17,8 +17,8 @@ class PDDLDomain:
 
     domain_name: str
     types: set[Type]
-    predicates: set[NamedPredicate]
-    operators: set[Operator]
+    predicates: frozenset[NamedPredicate]
+    operators: frozenset[Operator]
 
     def __post_init__(self):
         assert all(not p.is_negated for p in self.predicates)
@@ -101,7 +101,7 @@ class PDDLProblem:
 
     problem_name: str
     domain_name: str
-    objects: set[Object]
+    objects: frozenset[Object]
     init: set[GroundAtom]
     goal: LiteralConjunction | GroundAtom
 
