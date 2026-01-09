@@ -15,7 +15,7 @@ class PDDLDomain:
     """A PDDL domain."""
 
     domain_name: str
-    types: set[Type]
+    types: frozenset[Type]
     predicates: frozenset[NamedPredicate]
     operators: frozenset[Operator]
 
@@ -27,7 +27,7 @@ class PDDLDomain:
         predicates = "\n\t".join([lit.pddl_str() for lit in self.predicates])
         operators = "\n".join([op.pddl_str() for op in self.operators])
         constants = ""
-        requirements = ":typing"
+        requirements = ":strips :typing :negative-preconditions :disjunctive-preconditions :existential-preconditions :conditional-effects"
         if "=" in self.predicates:
             requirements += " :equality"
 
@@ -121,21 +121,29 @@ class PDDLProblem:
         else:
             return frozenset({self.goal})
 
+    @property
+    def init_str(self) -> str:
+        return "\n\t".join([atom.pddl_str() for atom in sorted(self.init, key=str)])
+
+    @property
+    def goal_str(self) -> str:
+        assert self.goal is not None
+        if isinstance(self.goal, GroundAtom) or len(self.goal_list) == 1:
+            return next(iter(self.goal_list)).pddl_str()
+        return "(and \n\t{}\n)".format("\n\t".join([atom.pddl_str() for atom in sorted(self.goal_list, key=str)]))
+
     def to_string(self):
         """Create PDDL problem string"""
         objects_str = self.objects_pddl_str()
-
-        init_str = "\n\t".join([atom.pddl_str() for atom in sorted(self.init, key=str)])
-        goal_str = " ".join([atom.pddl_str() for atom in sorted(self.goal_list, key=str)])
 
         problem_str = f"""
 (define (problem {self.problem_name})
   (:domain {self.domain_name})
   (:objects {objects_str})
   (:init 
-    {init_str}
+    {self.init_str}
   )
-  (:goal (and {goal_str}))
+  (:goal {self.goal_str})
 )
         """.strip()
 

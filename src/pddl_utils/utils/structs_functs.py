@@ -1,8 +1,18 @@
 from itertools import product
 import re
 from typing import Callable, Generator, Sequence, TypeVar
+from collections import defaultdict
 import numpy as np
-from pddl_utils.structs.structs import GroundAtom, GroundOperator, Object, Operator, Predicate, VarToObjSub, Variable
+from pddl_utils.structs.structs import (
+    GroundAtom,
+    GroundOperator,
+    Object,
+    Operator,
+    Predicate,
+    VarToObjSub,
+    Variable,
+    Type,
+)
 
 
 def transition(curr_state: set[GroundAtom], effect: set[GroundAtom]) -> set[GroundAtom]:
@@ -63,12 +73,12 @@ def abstract_state(
 
 
 def filter_state(
-    state: set[GroundAtom], known_predicates: list[str] | None, *, inverse: bool = False
-) -> set[GroundAtom]:
+    state: frozenset[GroundAtom], known_predicates: list[str] | None, *, inverse: bool = False
+) -> frozenset[GroundAtom]:
     if known_predicates is None:
         # we actually don't want to filter anything
         if inverse:
-            return set()
+            return frozenset()
         else:
             return state
 
@@ -79,10 +89,10 @@ def filter_state(
             not inverse and atom.predicate.name in known_predicates
         ):
             filtered_state.add(atom)
-    return filtered_state
+    return frozenset(filtered_state)
 
 
-def filter_valid_state(state: set[GroundAtom]) -> set[GroundAtom]:
+def filter_valid_state(state: frozenset[GroundAtom]) -> frozenset[GroundAtom]:
     filtered_state = set()
     for atom in state:
         assert isinstance(atom, GroundAtom)
@@ -92,16 +102,19 @@ def filter_valid_state(state: set[GroundAtom]) -> set[GroundAtom]:
     return filtered_state
 
 
-def state_to_str(state: set[GroundAtom], *, separator: str = " ") -> str:
+def state_to_str(state: frozenset[GroundAtom], *, separator: str = " ") -> str:
     return separator.join([atom.pddl_str() for atom in state])
 
 
-def get_objects_in_state(state: set[GroundAtom]) -> set[Object]:
-    objects = set()
-    for atom in state:
-        for obj in atom.objects:
-            objects.add(obj)
-    return objects
+def get_objects_in_state(state: frozenset[GroundAtom]) -> frozenset[Object]:
+    return frozenset({obj for atom in state for obj in atom.objects})
+
+
+def get_objects_by_type(objects: frozenset[Object]) -> dict[Type, set[Object]]:
+    objects_by_type: dict[Type, set[Object]] = defaultdict(set)
+    for obj in objects:
+        objects_by_type[obj.type].add(obj)
+    return objects_by_type
 
 
 def get_predicates_in_state(state: set[GroundAtom]) -> set[Predicate]:
@@ -109,6 +122,7 @@ def get_predicates_in_state(state: set[GroundAtom]) -> set[Predicate]:
     for atom in state:
         predicates.add(atom.predicate)
     return predicates
+
 
 def remove_types_from_domain(domain_str: str) -> str:
     """Remove types from the domain."""

@@ -10,6 +10,9 @@ from pddl_utils.structs.structs import (
     LiteralConjunction,
     LiteralDisjunction,
     Not,
+    When, 
+    Imply,
+    EqualTo,
     Object,
     Operator,
     Predicate,
@@ -178,6 +181,7 @@ def parse_formula(
     *,
     only_variables: Literal[True] = True,
     known_predicates: Optional[frozenset[Predicate]] = None,
+    variables: Optional[Sequence[Variable]] = None,
     unsupported_formulas: Optional[list[str]] = None,
 ) -> LiftedFormula: ...
 @overload
@@ -186,17 +190,25 @@ def parse_formula(
     *,
     only_variables: Literal[False] = False,
     known_predicates: Optional[frozenset[Predicate]] = None,
+    variables: Optional[Sequence[Variable]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> set[GroundAtom]: ...
+) -> frozenset[GroundAtom]: ...
 def parse_formula(
     formula_str: str,
     only_variables: bool = True,
     *,
     known_predicates: Optional[frozenset[Predicate]] = None,
+    variables: Optional[Sequence[Variable]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> LiftedFormula | LiteralConjunction | set[GroundAtom]:
+) -> LiftedFormula | LiteralConjunction | frozenset[GroundAtom]:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
     formula_str = remove_comments(formula_str)
+
+    if formula_str in ["()", "(and)", "(and )"]:
+        if only_variables:
+            return LiteralConjunction([])
+        else:
+            return frozenset()
 
     matches = re.match(rf"\(([a-zA-Z0-9_\-\=]+)(?:\s+([\w\W]+))?\)", formula_str)
     if matches is None:
@@ -213,20 +225,28 @@ def parse_formula(
         # must be a formula
         if formula_name in ["exists", "forall"]:
             variables_str, conditions_str = parentheses_groups(formula_content.strip())
-            variables = parse_variable_definitions(variables_str[1:-1])
+            parsed_variables = parse_variable_definitions(variables_str[1:-1])
+            # Merge with existing variables
+            merged_variables = list(variables) if variables else []
+            merged_variables.extend(parsed_variables)
             conditions = parse_formula(
                 conditions_str,
                 only_variables=True,
                 known_predicates=known_predicates,
+                variables=merged_variables,
                 unsupported_formulas=unsupported_formulas,
             )
             if formula_name == "forall":
-                return ForAll(variables, conditions)
+                return ForAll(parsed_variables, conditions)
             elif formula_name == "exists":
-                return Exists(variables, conditions)
+                return Exists(parsed_variables, conditions)
         elif formula_name == "=":
-            raise NotImplementedError()
-            terms = list(map(lambda t: parse_term(t, **kwargs), formula_content.split()))
+            variables_by_name = {v.name: v for v in variables} if variables else {}
+            terms = []
+            for term_str in formula_content.split():
+                term_name = term_str.strip()
+                assert term_name in variables_by_name
+                terms.append(variables_by_name[term_name])
             return EqualTo(*terms)
 
         try:
@@ -236,6 +256,7 @@ def parse_formula(
                         t,
                         only_variables=only_variables,
                         known_predicates=known_predicates,
+                        variables=variables,
                         unsupported_formulas=unsupported_formulas,
                     ),
                     parentheses_groups(formula_content.strip()) if formula_content is not None else [],
@@ -262,11 +283,9 @@ def parse_formula(
             return Not(term)
         elif formula_name == "when":
             assert only_variables
-            raise NotImplementedError()
             return When(condition=terms[0], effect=terms[1])
         elif formula_name == "imply":
             assert only_variables
-            raise NotImplementedError()
             return Imply(*terms)
         elif formula_name in ["if", "implies"]:
             assert only_variables
@@ -330,13 +349,13 @@ def parse_operator(
                 raise ValueError("Parsing parameters in `%s`: %s" % (action_name, str(e)))
         elif var_type == ":precondition":
             try:
-                preconditions = parse_formula(var_content, known_predicates=known_predicates)
+                preconditions = parse_formula(var_content, known_predicates=known_predicates, variables=parameters)
             except ValueError as e:
                 raise ValueError("Parsing precondition in `%s`: %s" % (action_name, str(e)))
         elif var_type == ":effect":
             try:
                 effects = parse_formula(
-                    var_content, known_predicates=known_predicates, unsupported_formulas=["or", "exists"]
+                    var_content, known_predicates=known_predicates, variables=parameters, unsupported_formulas=["or", "exists"]
                 )
             except ValueError as e:
                 raise ValueError("Parsing effect in `%s`: %s" % (action_name, str(e)))

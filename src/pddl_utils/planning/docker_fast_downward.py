@@ -64,7 +64,7 @@ class DockerFastDownward(PDDLPlanner):
         # sas_plan_file = next(docker_dir.glob("sas_plan*"), None)
         # if success:
         #     assert sas_plan_file is not None
-        #     sas_plan = SasPlan.from_string(sas_plan_file.read_text())
+        #     sas_plan = parse_sas_plan(sas_plan_file.read_text())
         # else:
         #     sas_plan = None
 

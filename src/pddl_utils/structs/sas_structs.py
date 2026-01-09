@@ -13,7 +13,7 @@ class SasAction:
     def __post_init__(self):
         object.__setattr__(self, "name", self.name.lower())
 
-    def validate(self, domain: PDDLDomain, objects: list[Object]) -> list[str]:
+    def validate(self, domain: PDDLDomain, objects: frozenset[Object]) -> list[str]:
         """
         Validates the action against the domain.
         :returns a list of errors if the action is invalid, otherwise an empty list.
@@ -67,7 +67,7 @@ class SasAction:
 class SasPlan:
     actions: list[SasAction]
 
-    def validate(self, domain: PDDLDomain, objects: list[Object]) -> list[str]:
+    def validate(self, domain: PDDLDomain, objects: frozenset[Object]) -> list[str]:
         """
         Validates the plan against the domain.
         :return : A list of error messages if the plan is invalid, otherwise an empty list.
