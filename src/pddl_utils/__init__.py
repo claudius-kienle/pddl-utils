@@ -42,6 +42,8 @@ from .structs import (
     PDDLProblem,
     parse_domain,
     parse_problem,
+    SasAction,
+    SasPlan,
 )
 
 __all__ = [
@@ -76,4 +78,6 @@ __all__ = [
     "PDDLProblem",
     "parse_domain",
     "parse_problem",
+    "SasAction",
+    "SasPlan",
 ]

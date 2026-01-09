@@ -14,6 +14,7 @@ from .structs import (
     ForAll,
     Exists,
 )
+from .sas_structs import SasAction, SasPlan
 from .pddl_structs import PDDLDomain, PDDLProblem
 from .pddl_structs_parser import parse_domain, parse_problem
 
@@ -36,4 +37,6 @@ __all__ = [
     "PDDLProblem",
     "parse_domain",
     "parse_problem",
+    "SasAction",
+    "SasPlan",
 ]

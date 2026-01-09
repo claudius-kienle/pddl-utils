@@ -1,8 +1,7 @@
 import logging
 from typing import List
 
-from pddl_utils import GroundAtom, Not, Object, PDDLDomain, PDDLProblem
-from pddl_utils.structs.sas_structs import SasAction, SasPlan
+from pddl_utils import GroundAtom, Not, PDDLDomain, PDDLProblem, SasPlan, SasAction
 
 logger = logging.getLogger(__name__)
 
