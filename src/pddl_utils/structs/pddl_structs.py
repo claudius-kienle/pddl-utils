@@ -7,7 +7,6 @@ from pddl_utils.structs.structs import (
     Object,
     GroundAtom,
     LiteralConjunction,
-    LiteralDisjunction,
 )
 
 
@@ -102,33 +101,32 @@ class PDDLProblem:
     problem_name: str
     domain_name: str
     objects: frozenset[Object]
-    init: set[GroundAtom]
-    goal: LiteralConjunction | GroundAtom
+    init: frozenset[GroundAtom]
+    goal: frozenset[GroundAtom] | GroundAtom
 
     def __post_init__(self):
-        if isinstance(self.goal, LiteralConjunction):
-            assert all(isinstance(lit, GroundAtom) for lit in self.goal.literals)
+        if isinstance(self.goal, frozenset):
+            assert all(isinstance(lit, GroundAtom) for lit in self.goal)
         elif isinstance(self.goal, GroundAtom):
             pass
         elif self.goal is not None:
             raise ValueError("Goal must be a GroundAtom or LiteralConjunction.")
 
     @property
-    def goal_list(self) -> set[GroundAtom]:
+    def goal_list(self) -> frozenset[GroundAtom]:
         if self.goal is None:
-            return set()
-        elif isinstance(self.goal, LiteralConjunction):
-            assert all(isinstance(lit, GroundAtom) for lit in self.goal.literals)
-            return self.goal.literals
+            return frozenset()
+        elif isinstance(self.goal, frozenset):
+            return self.goal
         else:
-            return {self.goal}
+            return frozenset({self.goal})
 
     def to_string(self):
         """Create PDDL problem string"""
         objects_str = self.objects_pddl_str()
 
         init_str = "\n\t".join([atom.pddl_str() for atom in sorted(self.init, key=str)])
-        goal_str = self.goal.pddl_str()
+        goal_str = " ".join([atom.pddl_str() for atom in sorted(self.goal_list, key=str)])
 
         problem_str = f"""
 (define (problem {self.problem_name})
@@ -137,7 +135,7 @@ class PDDLProblem:
   (:init 
     {init_str}
   )
-  (:goal {goal_str})
+  (:goal (and {goal_str}))
 )
         """.strip()
 
@@ -159,11 +157,11 @@ class PDDLProblem:
 
     def copy_with(
         self,
-        problem_name: str =None,
-        domain_name: str =None,
-        objects: set[Object] =None,
-        init: set[GroundAtom] =None,
-        goal: LiteralConjunction | GroundAtom =None,
+        problem_name: str | None = None,
+        domain_name: str | None = None,
+        objects: frozenset[Object] | None = None,
+        init: frozenset[GroundAtom] | None = None,
+        goal: frozenset[GroundAtom] | GroundAtom | None = None,
     ):
         return PDDLProblem(
             problem_name=problem_name if problem_name is not None else self.problem_name,

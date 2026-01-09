@@ -1,6 +1,6 @@
 import re
 from typing import Sequence
-from pddl_utils.structs.structs import Object, Operator, Predicate, LiteralConjunction
+from pddl_utils.structs.structs import NamedPredicate, Object, Operator, Predicate, LiteralConjunction
 from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 
 
@@ -27,7 +27,7 @@ def parse_domain(domain_str: str):
     domain_content = domain_match.group(2).strip()
 
     types = set()
-    predicates: set[Predicate] = set()
+    predicates: set[NamedPredicate] = set()
     operators: list[Operator] = []
     for next_group in parentheses_groups(domain_content):
         section_match = re.match(r"\((:\w+)", next_group)
@@ -55,8 +55,8 @@ def parse_domain(domain_str: str):
     return PDDLDomain(
         domain_name=domain_name,
         types=set(types),
-        predicates=predicates,
-        operators=set(operators),
+        predicates=frozenset(predicates),
+        operators=frozenset(operators),
     )
 
 
@@ -104,7 +104,6 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
             # Parse goal condition
             if section_content.strip():
                 goal = parse_formula(section_content, only_variables=False, known_predicates=frozenset(domain.predicates))
-                goal = LiteralConjunction(literals=goal)
 
     # Validate required fields
     if domain_name is None:
@@ -115,7 +114,7 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
     return PDDLProblem(
         problem_name=problem_name,
         domain_name=domain_name,
-        objects=set(objects),
-        init=init_facts,
-        goal=goal,
+        objects=frozenset(objects),
+        init=frozenset(init_facts),
+        goal=frozenset(goal),
     )

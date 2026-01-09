@@ -8,6 +8,9 @@ import time
 import abc
 from typing import Literal, Union, overload
 
+from pddl_utils.structs.sas_parser import parse_sas_plan
+from pddl_utils.structs.sas_structs import SasPlan
+
 
 class Planner:
     """An abstract planner."""
@@ -24,7 +27,7 @@ class Planner:
         timeout: int = 10,
         remove_files: bool = False,
         return_output: Literal[True] = True,
-    ) -> tuple[list[str], str]: ...
+    ) -> tuple[SasPlan, str]: ...
     @overload
     def plan_from_pddl(
         self,
@@ -34,10 +37,10 @@ class Planner:
         timeout: int = 10,
         remove_files: bool = False,
         return_output: Literal[False] = False,
-    ) -> list[str]: ...
+    ) -> SasPlan: ...
     def plan_from_pddl(
         self, dom_file, prob_file, horizon=float("inf"), timeout=10, remove_files=False, return_output=False
-    ) -> Union[list[str], tuple[list[str], str]]:
+    ) -> Union[SasPlan, tuple[SasPlan, str]]:
         """PDDL-specific planning method."""
         start_time = time.time()
         output = self._run(dom_file, prob_file, timeout)
@@ -47,10 +50,11 @@ class Planner:
         self._cleanup()
         if time.time() - start_time > timeout:
             raise PlanningTimeout("Planning timed out!")
-        pddl_plan = self._output_to_plan(output)
-        if len(pddl_plan) > horizon:
+        pddl_plan_str = self._output_to_plan(output)
+        if len(pddl_plan_str) > horizon:
             raise PlanningFailure("PDDL planning failed due to horizon")
 
+        pddl_plan = parse_sas_plan("\n".join(pddl_plan_str))
         if return_output:
             return pddl_plan, output
         else:

@@ -245,29 +245,6 @@ class Predicate:
     def __repr__(self) -> str:
         return str(self)
 
-    def pretty_str(self) -> tuple[str, str]:
-        """Display the predicate in a nice human-readable format.
-
-        Returns a tuple of (variables string, body string).
-        """
-        if hasattr(self._classifier, "pretty_str"):
-            # This is an invented predicate, from the predicate grammar.
-            pretty_str_f = getattr(self._classifier, "pretty_str")
-            return pretty_str_f()
-        # This is a known predicate, not from the predicate grammar.
-        vars_str = ", ".join(
-            # f"{CFG.grammar_search_classifier_pretty_str_names[i]}:{t.name}"
-            f"{arg.name}:{arg.type.name}"
-            for arg in self.args
-        )
-        vars_str_no_types = ", ".join(
-            # f"{CFG.grammar_search_classifier_pretty_str_names[i]}"
-            f"{i}"
-            for i in range(self.arity)
-        )
-        body_str = f"{self.name}({vars_str_no_types})"
-        return vars_str, body_str
-
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL
         file."""
@@ -691,13 +668,13 @@ class Operator:
             raise ValueError(
                 f"Syntax error: Action {self.name} has undeclared variables in effect: {remaining_effect_vars}"
             )
-        if len(self.effects.exposed_variables) == 0:
+        if len(self.effects.used_predicates) == 0:
             raise ValueError(
                 f"Action `{self.name}` has no effects. Every action must have at least one effect. If necessary, define new predicates."
             )
 
-    @lru_cache(maxsize=None)
-    def ground(self, objects: tuple[Object], state: frozenset[GroundAtom]) -> GroundOperator:
+    # @lru_cache(maxsize=None)
+    def ground(self, objects: tuple[Object, ...], state: frozenset[GroundAtom]) -> GroundOperator:
         """Ground into a _GroundOperator, given objects.
 
         Insist that objects are tuple for hashing in cache.

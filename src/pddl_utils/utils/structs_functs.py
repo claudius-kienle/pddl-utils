@@ -24,7 +24,7 @@ def get_substitutions(variables: Sequence[Variable], objects: frozenset[Object])
 
 
 def sample_ground_operator(
-    objects: frozenset[Object], sym_state: set[GroundAtom], operator: Operator
+    objects: frozenset[Object], sym_state: frozenset[GroundAtom], operator: Operator
 ) -> Generator[GroundOperator, None, None]:
     for sub in get_substitutions(operator.parameters, objects):
         ground_op = operator.ground(tuple(sub[v] for v in operator.parameters), frozenset(sym_state))

@@ -44,6 +44,11 @@ class SasAction:
         """Create a PDDL action string"""
         return f"({self.name} {' '.join(self.args)})"
 
+    def get_objects(self, objects: frozenset[Object]) -> tuple[Object, ...]:
+        """Get the objects corresponding to the action arguments."""
+        obj_map = {obj.name: obj for obj in objects}
+        return tuple([obj_map[arg] for arg in self.args])
+
     @cached_property
     def _str(self) -> str:
         return self.to_string()
@@ -78,6 +83,12 @@ class SasPlan:
         Converts the SasPlan object to a string representation.
         """
         return "\n".join([action.to_string() for action in self.actions])
+
+    def __iter__(self):
+        return iter(self.actions)
+
+    def __len__(self) -> int:
+        return len(self.actions)
 
     @cached_property
     def _str(self) -> str:
