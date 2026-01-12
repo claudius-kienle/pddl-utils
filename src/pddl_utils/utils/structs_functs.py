@@ -39,7 +39,7 @@ def sample_ground_operator(
     for sub in get_substitutions(operator.parameters, objects):
         ground_op = operator.ground(tuple(sub[v] for v in operator.parameters), frozenset(sym_state))
 
-        if not ground_op.preconditions <= sym_state:  # subset
+        if not ground_op.preconditions:  # subset
             continue
 
         yield ground_op
