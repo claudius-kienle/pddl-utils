@@ -470,7 +470,8 @@ class LiftedAtom(_Atom):
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this lifted atom holds given a substitution and state."""
-        return self.ground(sub, state).issubset(state)
+        from pddl_utils.utils.structs_functs import filter_valid_state
+        return filter_valid_state(self.ground(sub, state)).issubset(state)
 
 
 @dataclass(frozen=True, repr=False, eq=False)

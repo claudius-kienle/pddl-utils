@@ -99,7 +99,7 @@ def filter_valid_state(state: frozenset[GroundAtom]) -> frozenset[GroundAtom]:
         if atom.predicate.is_negated:
             continue
         filtered_state.add(atom)
-    return filtered_state
+    return frozenset(filtered_state)
 
 
 def state_to_str(state: frozenset[GroundAtom], *, separator: str = " ") -> str:
