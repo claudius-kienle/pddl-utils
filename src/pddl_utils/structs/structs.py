@@ -968,7 +968,7 @@ class GroundOperator:
     parent: Operator
     objects: Sequence[Object]
     preconditions: bool
-    effects: set[GroundAtom]
+    effects: frozenset[GroundAtom]
 
     @cached_property
     def _str(self) -> str:
