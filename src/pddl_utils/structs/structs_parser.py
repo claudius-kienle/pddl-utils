@@ -38,12 +38,28 @@ def parse_type(type_str: str) -> Type:
 
 def parse_types(content_str: str) -> Sequence[Type]:
     types = list()
-    for type_group in re.findall(r"([^-]+)-\s*(\w+)", content_str):
+    # First, handle types with explicit supertypes (e.g., "type1 type2 - supertype")
+    typed_matches = re.findall(r"([^-]+)-\s*(\w+)", content_str)
+    for type_group in typed_matches:
         type_names = type_group[0].strip().split()
         type_super = parse_type(type_group[1].strip())
         for type_name in type_names:
             if type_name.strip():
-                types.append(Type(type_name.strip(), type_super))
+                types.append(Type(type_name.strip(), parent=type_super))
+    
+    # Then, handle types without explicit supertypes (e.g., "block robot")
+    # Remove all typed definitions from content_str
+    remaining = content_str
+    for match in typed_matches:
+        remaining = remaining.replace(f"{match[0]}- {match[1]}", "")
+        remaining = remaining.replace(f"{match[0]}-{match[1]}", "")
+    
+    # Parse remaining untyped type names (they implicitly inherit from object)
+    untyped_names = remaining.strip().split()
+    for type_name in untyped_names:
+        if type_name.strip() and not any(t.name == type_name.strip() for t in types):
+            types.append(Type(type_name.strip(), parent=None))
+    
     return types
 
 

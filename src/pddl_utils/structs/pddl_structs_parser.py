@@ -54,7 +54,7 @@ def parse_domain(domain_str: str):
 
     return PDDLDomain(
         domain_name=domain_name,
-        types=set(types),
+        types=frozenset(types),
         predicates=frozenset(predicates),
         operators=frozenset(operators),
     )
