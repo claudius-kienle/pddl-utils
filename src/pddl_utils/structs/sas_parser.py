@@ -1,6 +1,6 @@
 import re
 from pddl_utils.structs.sas_structs import SasAction, SasPlan
-from python_utils.string_utils import remove_comments
+from pddl_utils.structs.string_utils import remove_comments
 
 
 def parse_sas_plan(sas_plan_str: str) -> SasPlan:

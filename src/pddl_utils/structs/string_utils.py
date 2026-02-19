@@ -2,6 +2,14 @@ from typing import Generator
 import re
 
 
+def remove_comments(text: str, comment_style: str = ";") -> str:
+    # Remove single-line comments
+    text = re.sub(rf"{comment_style}.*", "", text)
+    # Remove multi-line comments
+    # text = re.sub(r"\(\*[\s\S]*?\*\)", "", text)
+    return text
+
+
 def until_next_closing_parenthesis(s: str) -> tuple[str, str]:
     """
     This function finds the next closing parenthesis in a string and returns the substring up to that point

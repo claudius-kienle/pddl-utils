@@ -869,10 +869,6 @@ class Operator:
             raise ValueError(
                 f"Syntax error: Action {self.name} has undeclared variables in effect: {remaining_effect_vars}"
             )
-        if len(self.effects.used_predicates) == 0:
-            raise ValueError(
-                f"Action `{self.name}` has no effects. Every action must have at least one effect. If necessary, define new predicates."
-            )
 
     # @lru_cache(maxsize=None)
     def ground(self, objects: tuple[Object, ...], state: frozenset[GroundAtom]) -> GroundOperator:

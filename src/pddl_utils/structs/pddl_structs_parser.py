@@ -4,7 +4,7 @@ from pddl_utils.structs.structs import NamedPredicate, Object, Operator, Predica
 from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 
 
-from pddl_utils.structs.string_utils import parentheses_groups
+from pddl_utils.structs.string_utils import remove_comments, parentheses_groups
 from pddl_utils.structs.structs_parser import (
     parse_formula,
     parse_ground_atom,
@@ -14,7 +14,6 @@ from pddl_utils.structs.structs_parser import (
     parse_types,
     name_rgx,
 )
-from python_utils import remove_comments
 
 
 def parse_domain(domain_str: str):

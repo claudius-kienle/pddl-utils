@@ -27,8 +27,8 @@ class PDDLDomain:
         predicates = "\n\t".join([lit.pddl_str() for lit in self.predicates])
         operators = "\n".join([op.pddl_str() for op in self.operators])
         constants = ""
-        requirements = ":strips :typing :negative-preconditions :disjunctive-preconditions :existential-preconditions :conditional-effects"
-        if "=" in self.predicates:
+        requirements = ":strips :typing :universal-preconditions :negative-preconditions :disjunctive-preconditions :existential-preconditions :conditional-effects"
+        if "=" in operators:
             requirements += " :equality"
 
         domain_str = """
@@ -84,6 +84,9 @@ class PDDLDomain:
             else:
                 types_str.append("{}".format(type.name))
         return " ".join(types_str)
+
+    def __str__(self) -> str:
+        raise RuntimeError("Do not implement to assert backward compatibility. Use to_string() instead.")
 
     def copy_with(self, domain_name=None, types=None, predicates=None, operators=None):
         return PDDLDomain(
@@ -162,6 +165,9 @@ class PDDLProblem:
         for obs in self.objects:
             objects_strs.append(f"{obs.name} - {obs.type.name}")
         return " ".join(objects_strs)
+
+    def __str__(self) -> str:
+        raise RuntimeError("Do not implement to assert backward compatibility. Use to_string() instead.")
 
     def copy_with(
         self,

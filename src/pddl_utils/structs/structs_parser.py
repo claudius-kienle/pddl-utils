@@ -20,9 +20,7 @@ from pddl_utils.structs.structs import (
     Variable,
     is_a_keyword,
 )
-from python_utils.string_utils import remove_comments
-
-from pddl_utils.structs.string_utils import until_next_closing_parenthesis, parentheses_groups
+from pddl_utils.structs.string_utils import remove_comments, until_next_closing_parenthesis, parentheses_groups
 
 name_rgx = r"[a-zA-Z0-9-_]+"
 
@@ -30,7 +28,7 @@ name_rgx = r"[a-zA-Z0-9-_]+"
 def parse_type(type_str: str) -> Type:
     type_str = type_str.strip()
     if type_str == "object":
-        raise ValueError("Type 'object' is not allowed for variables, as it is the super-type of all types.")
+        return Type("object")  # the super-type of all types
     if is_a_keyword(type_str):
         raise ValueError(f"Syntax error: {type_str} is a keyword and cannot be used as a type")
     return Type(type_str)
@@ -71,6 +69,8 @@ def parse_variable(variables_str: str, variable_type: Optional[Type] = None) -> 
     variable_name = variables_str.strip()
     if variable_type is None:
         raise ValueError(f"Syntax error: Variable {variable_name} must have a type.")
+    if variable_type.name == "object":
+        raise ValueError("Type 'object' is not allowed for variables, as it is the super-type of all types.")
     if is_a_keyword(variable_name):
         raise ValueError(f"Syntax error: {variable_name} is a keyword and cannot be used as a variable")
     return Variable(variable_name, variable_type)
