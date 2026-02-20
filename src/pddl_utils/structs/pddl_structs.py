@@ -6,7 +6,6 @@ from pddl_utils.structs.structs import (
     Type,
     Object,
     GroundAtom,
-    LiteralConjunction,
 )
 
 
@@ -55,7 +54,7 @@ class PDDLDomain:
     def get_operator_by_name(self, name: str) -> Operator | None:
         """Get an operator by its name."""
         for op in self.operators:
-            if op.name == name:
+            if op.name.lower() == name.lower():
                 return op
         return None
 

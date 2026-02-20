@@ -146,6 +146,10 @@ class _TypedEntity:
     def __repr__(self) -> str:
         return self._str
 
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, _TypedEntity)
+        return str(self) == str(other)
+
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL
         file."""
@@ -264,7 +268,12 @@ class Predicate:
         assert self._classifier is not None
         return not self._classifier(state, objects)
 
-    def __lt__(self, other: Predicate) -> bool:
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, Predicate)
+        return str(self) == str(other)
+
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, Predicate)
         return str(self) < str(other)
 
 
@@ -354,7 +363,6 @@ class _Atom:
         return self._hash
 
     def __eq__(self, other: object) -> bool:
-        assert isinstance(other, _Atom)
         return str(self) == str(other)
 
     def __lt__(self, other: object) -> bool:
@@ -562,7 +570,7 @@ class LiteralDisjunction(LiftedFormulaStrMixin):
         """Get all variables from the literals."""
         variables = set()
         for lit in self.literals:
-            variables.update(v.name for v in lit.exposed_variables)
+            variables.update(v for v in lit.exposed_variables)
         return variables
 
     def pddl_str(self) -> str:

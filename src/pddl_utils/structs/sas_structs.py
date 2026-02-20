@@ -10,9 +10,6 @@ class SasAction:
     name: str
     args: list[str]
 
-    def __post_init__(self):
-        object.__setattr__(self, "name", self.name.lower())
-
     def validate(self, domain: PDDLDomain, objects: frozenset[Object]) -> list[str]:
         """
         Validates the action against the domain.

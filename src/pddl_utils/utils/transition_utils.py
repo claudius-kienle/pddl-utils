@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from pddl_utils import GroundAtom, Not, PDDLDomain, PDDLProblem, SasPlan, SasAction
+from pddl_utils import GroundAtom, Not, PDDLDomain, PDDLProblem, SasPlan, SasAction, Object
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,8 @@ def get_goal_state(domain: PDDLDomain, problem: PDDLProblem, actions: SasPlan) -
 
 
 def get_next_state(
-    domain: PDDLDomain, current_state: frozenset[GroundAtom], action: SasAction
+    domain: PDDLDomain, current_state: frozenset[GroundAtom], objects: frozenset[Object], action: SasAction
 ) -> frozenset[GroundAtom]:
-    objects = frozenset({obj for atom in current_state for obj in atom.objects})
     problem = PDDLProblem(
         domain_name=domain.domain_name,
         problem_name="ai_problem",
@@ -54,10 +53,11 @@ def get_next_state(
 def get_next_problem(
     domain: PDDLDomain,
     current_state: frozenset[GroundAtom],
+    objects: frozenset[Object],
     action: SasAction,
     effects_for_goal: bool = False,
 ) -> PDDLProblem:
-    next_state = get_next_state(domain=domain, current_state=current_state, action=action)
+    next_state = get_next_state(domain=domain, current_state=current_state, objects=objects, action=action)
 
     if effects_for_goal:
         goal = next_state - current_state
