@@ -204,7 +204,9 @@ class Predicate:
     # The classifier takes in a complete state and a sequence of objects
     # representing the arguments. These objects should be the only ones
     # treated "specially" by the classifier.
-    _classifier: Optional[Callable[[State, Sequence[Object]], bool]] = field(compare=False, default=None)
+    _classifier: Optional[Callable[[State, Sequence[Object]], bool]] = field(
+        compare=False, default=None
+    )
 
     def __call__(self, entities: Sequence[_TypedEntity]) -> _Atom:
         """Convenience method for generating Atoms."""
@@ -261,7 +263,12 @@ class Predicate:
 
     def get_negation(self) -> Predicate:
         """Return a negated version of this predicate."""
-        return Predicate(self.name, self.types, is_negated=not self.is_negated, _classifier=self._negated_classifier)
+        return Predicate(
+            self.name,
+            self.types,
+            is_negated=not self.is_negated,
+            _classifier=self._negated_classifier,
+        )
 
     def _negated_classifier(self, state: State, objects: Sequence[Object]) -> bool:
         # Separate this into a named function for pickling reasons.
@@ -282,16 +289,11 @@ class NamedPredicate(Predicate):
     variables: Sequence[Variable] = field(kw_only=True)
     types: Sequence[Type] = field(init=False)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "types", [var.type for var in self.variables])
+
     def __hash__(self) -> int:
         return super().__hash__()
-
-    @property
-    def types(self) -> Sequence[Type]:
-        return [var.type for var in self.variables]
-
-    @types.setter
-    def types(self, value: Sequence[Type]) -> None:
-        pass
 
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL
@@ -323,7 +325,9 @@ class _Atom:
 
     def __post_init__(self) -> None:
         if isinstance(self.entities, _TypedEntity):
-            raise ValueError("Atoms expect a sequence of entities, not a " "single entity.")
+            raise ValueError(
+                "Atoms expect a sequence of entities, not a " "single entity."
+            )
         if len(self.entities) != self.predicate.arity:
             raise ValueError(
                 f"Syntax error: Predicate {self.predicate.name} must have {self.predicate.arity} arguments. Found: {len(self.entities)}"
@@ -372,40 +376,40 @@ class _Atom:
 
 class LiftedFormulaBase(ABC):
     """Abstract base class for all lifted formulas.
-    
+
     Defines the common interface that all lifted formulas must implement.
     """
-    
+
     @property
     @abstractmethod
     def used_predicates(self) -> set[Predicate]:
         """Return the set of predicates used in this formula."""
         ...
-    
+
     @property
     @abstractmethod
     def exposed_variables(self) -> set[Variable]:
         """Return the set of variables exposed (not quantified) in this formula."""
         ...
-    
+
     @abstractmethod
     def pddl_str(self) -> str:
         """Return a PDDL string representation of this formula."""
         ...
-    
+
     @abstractmethod
     def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
         """Ground this formula given a variable substitution and state.
-        
+
         Returns a set of ground atoms that represent the grounded formula.
         For constraints like EqualTo, may return empty set or raise an error.
         """
         ...
-    
+
     @abstractmethod
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this formula holds given a substitution and state.
-        
+
         Returns True if the formula is satisfied, False otherwise.
         """
         ...
@@ -413,29 +417,29 @@ class LiftedFormulaBase(ABC):
 
 class LiftedFormulaStrMixin:
     """Mixin providing common string representation and hashing for lifted formulas.
-    
+
     Classes using this mixin must implement a _str property that returns the string representation.
     """
-    
+
     @cached_property
     @abstractmethod
     def _str(self) -> str:
         """Return the string representation of this formula."""
         ...
-    
+
     def __str__(self) -> str:
         return self._str
-    
+
     def __repr__(self) -> str:
         return str(self)
-    
+
     @cached_property
     def _hash(self) -> int:
         return hash(str(self))
-    
+
     def __hash__(self) -> int:
         return self._hash
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, self.__class__):
             return False
@@ -466,10 +470,12 @@ class LiftedAtom(_Atom):
     def _str(self) -> str:
         return str(self.predicate) + "(" + ", ".join(map(str, self.variables)) + ")"
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         """Create a GroundAtom with a given substitution."""
         assert set(self.variables).issubset(set(sub.keys()))
-        return {GroundAtom(self.predicate, [sub[v] for v in self.variables])}
+        return frozenset({GroundAtom(self.predicate, [sub[v] for v in self.variables])})
 
     def substitute(self, sub: VarToVarSub) -> LiftedAtom:
         """Create a LiftedAtom with a given substitution."""
@@ -479,6 +485,7 @@ class LiftedAtom(_Atom):
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this lifted atom holds given a substitution and state."""
         from pddl_utils.utils.structs_functs import filter_valid_state
+
         return filter_valid_state(self.ground(sub, state)).issubset(state)
 
 
@@ -533,14 +540,16 @@ class LiteralConjunction(LiftedFormulaStrMixin):
         literal_strs = [lit.pddl_str() for lit in self.literals]
         return f"(and {' '.join(literal_strs)})"
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         """Ground the existential by substituting variables with objects."""
         assert set(self.exposed_variables).issubset(set(sub.keys()))
         grounded_literals = []
         for lit in self.literals:
             assert not isinstance(lit, EqualTo)
             grounded_literals.extend(lit.ground(sub, state))
-        return set(grounded_literals)
+        return frozenset(grounded_literals)
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether all literals in the conjunction hold."""
@@ -580,7 +589,7 @@ class LiteralDisjunction(LiftedFormulaStrMixin):
         literal_strs = [lit.pddl_str() for lit in self.literals]
         return f"(or {' '.join(literal_strs)})"
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> frozenset[GroundAtom]:
         """Ground the existential by substituting variables with objects."""
         raise NotImplementedError()
 
@@ -618,8 +627,13 @@ class ForAll(LiftedFormulaStrMixin):
         """Return the positive version of this ForAll."""
         return ForAll(self.variables, self.body, is_negative=False)
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
-        from pddl_utils.utils.structs_functs import get_objects_in_state, get_objects_by_type
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
+        from pddl_utils.utils.structs_functs import (
+            get_objects_in_state,
+            get_objects_by_type,
+        )
 
         objects = get_objects_in_state(state)
         objs_by_type = get_objects_by_type(objects)
@@ -638,7 +652,7 @@ class ForAll(LiftedFormulaStrMixin):
             grounded_body = self.body.ground(var_sub, state)
             all_grounded.update(grounded_body)
 
-        return all_grounded
+        return frozenset(all_grounded)
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether the forall quantification holds."""
@@ -691,12 +705,17 @@ class Exists(LiftedFormulaStrMixin):
             return f"(not {exists_str})"
         return exists_str
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         raise NotImplementedError()
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether the existential quantification holds."""
-        from pddl_utils.utils.structs_functs import get_objects_in_state, get_objects_by_type
+        from pddl_utils.utils.structs_functs import (
+            get_objects_in_state,
+            get_objects_by_type,
+        )
 
         objects = get_objects_in_state(state)
         objs_by_type = get_objects_by_type(objects)
@@ -746,13 +765,15 @@ class When(LiftedFormulaStrMixin):
         effect_str = self.effect.pddl_str()
         return f"(when {condition_str} {effect_str})"
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         """Ground the when statement by substituting variables with objects."""
         assert set(self.exposed_variables).issubset(set(sub.keys()))
         # Use evaluate to check if condition holds
         if self.condition.evaluate(sub, state):
             return self.effect.ground(sub, state)
-        return set()
+        return frozenset()
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate the when statement - returns true if condition implies effect."""
@@ -784,7 +805,9 @@ class Imply(LiftedFormulaStrMixin):
         consequent_str = self.consequent.pddl_str()
         return f"(imply {antecedent_str} {consequent_str})"
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         """Ground the implication by substituting variables with objects."""
         raise RuntimeError("Imply is a logical constraint, not an effect.")
 
@@ -810,7 +833,10 @@ class EqualTo(LiftedFormulaStrMixin):
 
     def __post_init__(self) -> None:
         # Both entities should be of compatible types
-        if not (self.left.is_instance(self.right.type) or self.right.is_instance(self.left.type)):
+        if not (
+            self.left.is_instance(self.right.type)
+            or self.right.is_instance(self.left.type)
+        ):
             raise ValueError(
                 f"Type mismatch in equality: {self.left.name}:{self.left.type.name} and {self.right.name}:{self.right.type.name}"
             )
@@ -831,7 +857,9 @@ class EqualTo(LiftedFormulaStrMixin):
             return f"(not {eq_str})"
         return eq_str
 
-    def ground(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> set[GroundAtom]:
+    def ground(
+        self, sub: VarToObjSub, state: frozenset[GroundAtom]
+    ) -> frozenset[GroundAtom]:
         raise RuntimeError("Cannot ground an equality constraint into atoms.")
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
@@ -867,7 +895,9 @@ class Operator:
     effects: LiftedFormula
 
     def __post_init__(self) -> None:
-        remaining_precond_vars = self.preconditions.exposed_variables - set(self.parameters)
+        remaining_precond_vars = self.preconditions.exposed_variables - set(
+            self.parameters
+        )
         if len(remaining_precond_vars) > 0:
             raise ValueError(
                 f"Syntax error: Action {self.name} has undeclared variables in precondition: {remaining_precond_vars}"
@@ -879,7 +909,9 @@ class Operator:
             )
 
     # @lru_cache(maxsize=None)
-    def ground(self, objects: tuple[Object, ...], state: frozenset[GroundAtom]) -> GroundOperator:
+    def ground(
+        self, objects: tuple[Object, ...], state: frozenset[GroundAtom]
+    ) -> GroundOperator:
         """Ground into a _GroundOperator, given objects.
 
         Insist that objects are tuple for hashing in cache.
@@ -1061,10 +1093,28 @@ def Not(x: LiteralDisjunction) -> LiteralConjunction: ...
 
 def Not(
     x: Union[
-        Predicate, LiftedAtom, GroundAtom, ForAll, Exists, When, Imply, EqualTo, LiteralConjunction, LiteralDisjunction
+        Predicate,
+        LiftedAtom,
+        GroundAtom,
+        ForAll,
+        Exists,
+        When,
+        Imply,
+        EqualTo,
+        LiteralConjunction,
+        LiteralDisjunction,
     ],
 ) -> Union[
-    Predicate, LiftedAtom, GroundAtom, ForAll, Exists, When, Imply, EqualTo, LiteralConjunction, LiteralDisjunction
+    Predicate,
+    LiftedAtom,
+    GroundAtom,
+    ForAll,
+    Exists,
+    When,
+    Imply,
+    EqualTo,
+    LiteralConjunction,
+    LiteralDisjunction,
 ]:
     """Negate a Predicate, Atom, or other logical structure."""
     if isinstance(x, Predicate):
@@ -1085,7 +1135,9 @@ def Not(
         negated_consequent = Not(x.consequent)
         if isinstance(negated_consequent, (LiftedAtom, GroundAtom)):
             return LiteralConjunction([x.antecedent, negated_consequent])
-        raise ValueError(f"Cannot negate Imply with consequent of type {type(x.consequent)}")
+        raise ValueError(
+            f"Cannot negate Imply with consequent of type {type(x.consequent)}"
+        )
 
     if isinstance(x, EqualTo):
         # NOT(x = y) toggles is_negative

@@ -33,6 +33,40 @@ def get_substitutions(variables: Sequence[Variable], objects: frozenset[Object])
         yield substitution
 
 
+def complete_state_with_false_ground_atoms(
+    state: frozenset[GroundAtom], predicates: frozenset[Predicate], objects: frozenset[Object]
+) -> frozenset[GroundAtom]:
+    """Return a complete symbolic state by adding missing grounded atoms as false.
+
+    The input ``state`` may only contain positive atoms (true facts), e.g. after
+    parsing ``:init`` from PDDL. This function enumerates all typed groundings of
+    ``predicates`` with ``objects`` and adds the negated version for any grounding
+    not already present as either positive or negative.
+    """
+    complete_state = set(state)
+
+    for pred in predicates:
+        positive_pred = pred.get_negation() if pred.is_negated else pred
+        variables = [Variable(f"?var{i}", t) for i, t in enumerate(positive_pred.types)]
+
+        if not variables:
+            positive_atom = GroundAtom(positive_pred, [])
+            negative_atom = GroundAtom(positive_pred.get_negation(), [])
+            if positive_atom not in complete_state and negative_atom not in complete_state:
+                complete_state.add(negative_atom)
+            continue
+
+        objects_per_var = [[obj for obj in objects if obj.is_instance(var.type)] for var in variables]
+        for args in product(*objects_per_var):
+            positive_atom = GroundAtom(positive_pred, args)
+            negative_atom = GroundAtom(positive_pred.get_negation(), args)
+            if positive_atom in complete_state or negative_atom in complete_state:
+                continue
+            complete_state.add(negative_atom)
+
+    return frozenset(complete_state)
+
+
 def sample_ground_operator(
     objects: frozenset[Object], sym_state: frozenset[GroundAtom], operator: Operator
 ) -> Generator[GroundOperator, None, None]:

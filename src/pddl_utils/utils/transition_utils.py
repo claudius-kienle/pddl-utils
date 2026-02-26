@@ -62,7 +62,6 @@ def get_next_problem(
     if effects_for_goal:
         goal = next_state - current_state
 
-    objects = frozenset({obj for atom in current_state for obj in atom.objects})
     return PDDLProblem(
         domain_name=domain.domain_name,
         problem_name="ai_subproblem",

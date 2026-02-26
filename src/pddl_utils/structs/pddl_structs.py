@@ -166,7 +166,11 @@ class PDDLProblem:
         return " ".join(objects_strs)
 
     def __str__(self) -> str:
-        raise RuntimeError("Do not implement to assert backward compatibility. Use to_string() instead.")
+        num_goals = len(self.goal_list) if self.goal is not None else 0
+        return f"PDDLProblem({self.problem_name}, domain={self.domain_name}, objs={len(self.objects)}, init={len(self.init)}, goal={num_goals})"
+
+    def __repr__(self) -> str:
+        return str(self)
 
     def copy_with(
         self,

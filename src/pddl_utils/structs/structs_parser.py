@@ -220,7 +220,7 @@ def parse_formula(
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
-    if formula_str in ["()", "(and)", "(and )"]:
+    if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
         if only_variables:
             return LiteralConjunction([])
         else:
