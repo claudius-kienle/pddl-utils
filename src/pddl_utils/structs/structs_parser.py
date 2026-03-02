@@ -10,7 +10,7 @@ from pddl_utils.structs.structs import (
     LiteralConjunction,
     LiteralDisjunction,
     Not,
-    When, 
+    When,
     Imply,
     EqualTo,
     Object,
@@ -44,20 +44,20 @@ def parse_types(content_str: str) -> Sequence[Type]:
         for type_name in type_names:
             if type_name.strip():
                 types.append(Type(type_name.strip(), parent=type_super))
-    
+
     # Then, handle types without explicit supertypes (e.g., "block robot")
     # Remove all typed definitions from content_str
     remaining = content_str
     for match in typed_matches:
         remaining = remaining.replace(f"{match[0]}- {match[1]}", "")
         remaining = remaining.replace(f"{match[0]}-{match[1]}", "")
-    
+
     # Parse remaining untyped type names (they implicitly inherit from object)
     untyped_names = remaining.strip().split()
     for type_name in untyped_names:
         if type_name.strip() and not any(t.name == type_name.strip() for t in types):
             types.append(Type(type_name.strip(), parent=None))
-    
+
     return types
 
 
@@ -115,9 +115,9 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-def parse_ground_atom(ground_atom_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> GroundAtom:
-    atom = parse_formula(ground_atom_str, only_variables=False, known_predicates=known_predicates)
-    assert isinstance(atom, set) and len(atom) == 1
+def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
+    atom = parse_ground_formula(ground_atom_str, known_predicates=known_predicates)
+    assert isinstance(atom, frozenset) and len(atom) == 1
     return next(iter(atom))
 
 
@@ -145,6 +145,48 @@ def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Pred
 
     objects = [parse_object(a, t) for a, t in zip(predicate_args, predicate.types)]
     return GroundAtom(predicate, objects)
+
+
+def collect_inferred_predicates(
+    formula_str: str,
+    objects: frozenset[Object],
+) -> frozenset[NamedPredicate]:
+    """Walk a ground formula tree and populate inferred_predicates from referenced objects.
+
+    Does not build atoms — just ensures every predicate leaf is registered so
+    that the existing parse_ground_formula / parse_ground_atom can be called afterwards.
+    """
+    formula_str = remove_comments(formula_str).strip()
+    if not (formula_str.startswith("(") and formula_str.endswith(")")):
+        return frozenset()
+
+    matches = re.match(rf"\(([a-zA-Z0-9_\-]+)(?:\s+([\w\W]+))?\)", formula_str)
+    if matches is None:
+        return frozenset()
+
+    formula_name = matches.group(1)
+    formula_content = matches.group(2)
+    inferred_predicates = set()
+
+    if is_a_keyword(formula_name):
+        # Recurse into compound formulas (and, not, or, forall, exists, …)
+        for sub_str in parentheses_groups(formula_content.strip()) if formula_content else []:
+            inferred_predicates |= collect_inferred_predicates(sub_str, objects)
+    elif formula_name not in inferred_predicates:
+        arg_names = formula_content.split() if formula_content else []
+        obj_list: list[Object] = []
+        objects_by_name = {obj.name: obj for obj in objects}
+        for arg_name in arg_names:
+            if arg_name not in objects_by_name:
+                raise ValueError(
+                    f"Object '{arg_name}' not found in the objects list. "
+                    "Make sure the :objects section is complete before :init/:goal."
+                )
+            obj_list.append(objects_by_name[arg_name])
+        variables = [Variable(f"?var{i}", obj.type) for i, obj in enumerate(obj_list)]
+        inferred_predicates.add(NamedPredicate(name=formula_name, variables=variables))
+
+    return frozenset(inferred_predicates)
 
 
 def parse_predicate(predicate_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> NamedPredicate:
@@ -191,40 +233,18 @@ def parse_lifted_atom(lifted_atom_str: str, *, known_predicates: Optional[frozen
     )
 
 
-@overload
-def parse_formula(
+def parse_lifted_formula(
     formula_str: str,
-    *,
-    only_variables: Literal[True] = True,
-    known_predicates: Optional[frozenset[Predicate]] = None,
-    variables: Optional[Sequence[Variable]] = None,
-    unsupported_formulas: Optional[list[str]] = None,
-) -> LiftedFormula: ...
-@overload
-def parse_formula(
-    formula_str: str,
-    *,
-    only_variables: Literal[False] = False,
-    known_predicates: Optional[frozenset[Predicate]] = None,
-    variables: Optional[Sequence[Variable]] = None,
-    unsupported_formulas: Optional[list[str]] = None,
-) -> frozenset[GroundAtom]: ...
-def parse_formula(
-    formula_str: str,
-    only_variables: bool = True,
     *,
     known_predicates: Optional[frozenset[Predicate]] = None,
     variables: Optional[Sequence[Variable]] = None,
     unsupported_formulas: Optional[list[str]] = None,
-) -> LiftedFormula | LiteralConjunction | frozenset[GroundAtom]:
+) -> LiftedFormula:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
     if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
-        if only_variables:
-            return LiteralConjunction([])
-        else:
-            return frozenset()
+        return LiteralConjunction([])
 
     matches = re.match(rf"\(([a-zA-Z0-9_\-\=]+)(?:\s+([\w\W]+))?\)", formula_str)
     if matches is None:
@@ -238,16 +258,14 @@ def parse_formula(
         raise ValueError(f"Syntax error: Formula `{formula_name}` is not supported in the current context")
 
     if is_a_keyword(formula_name):
-        # must be a formula
         if formula_name in ["exists", "forall"]:
             variables_str, conditions_str = parentheses_groups(formula_content.strip())
             parsed_variables = parse_variable_definitions(variables_str[1:-1])
             # Merge with existing variables
             merged_variables = list(variables) if variables else []
             merged_variables.extend(parsed_variables)
-            conditions = parse_formula(
+            conditions = parse_lifted_formula(
                 conditions_str,
-                only_variables=True,
                 known_predicates=known_predicates,
                 variables=merged_variables,
                 unsupported_formulas=unsupported_formulas,
@@ -257,20 +275,20 @@ def parse_formula(
             elif formula_name == "exists":
                 return Exists(parsed_variables, conditions)
         elif formula_name == "=":
-            variables_by_name = {v.name: v for v in variables} if variables else {}
+            variables_by_name: dict[str, Variable] = {v.name: v for v in variables} if variables else {}
             terms = []
             for term_str in formula_content.split():
                 term_name = term_str.strip()
                 assert term_name in variables_by_name
                 terms.append(variables_by_name[term_name])
-            return EqualTo(*terms)
+            assert len(terms) == 2, "Equality must have exactly two terms"
+            return EqualTo(terms[0], terms[1])
 
         try:
             terms = list(
                 map(
-                    lambda t: parse_formula(
+                    lambda t: parse_lifted_formula(
                         t,
-                        only_variables=only_variables,
                         known_predicates=known_predicates,
                         variables=variables,
                         unsupported_formulas=unsupported_formulas,
@@ -280,47 +298,76 @@ def parse_formula(
             )
         except AssertionError:
             raise ValueError(f"Syntax error: {formula_content} is not a valid formula")
+
         if formula_name == "and":
-            if only_variables:
-                return LiteralConjunction(terms)
-            else:
-                return set(t for ts in terms for t in ts)
+            return LiteralConjunction(terms)
         elif formula_name == "or":
-            assert only_variables
             return LiteralDisjunction(terms)
         elif formula_name == "not":
             if len(terms) != 1:
                 raise ValueError(f"Syntax error: Not operator must have one argument: {formula_str}")
-            term = terms[0]
-            # if isinstance(term, ExistsCondition):
-            #     raise ValueError(f"Syntax error: Not operator must not be used with quantifiers: {formula_str}")
-            if isinstance(term, set):
-                return {Not(t) for t in term}
-            return Not(term)
+            return Not(terms[0])
         elif formula_name == "when":
-            assert only_variables
             return When(condition=terms[0], effect=terms[1])
         elif formula_name == "imply":
-            assert only_variables
             return Imply(*terms)
         elif formula_name in ["if", "implies"]:
-            assert only_variables
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
         else:
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
             # raise NotImplementedError(str(formula_str))
     else:
-        # predicate
-        if only_variables:
-            return parse_lifted_atom(formula_str, known_predicates=known_predicates)
+        return parse_lifted_atom(formula_str, known_predicates=known_predicates)
+
+
+def parse_ground_formula(
+    formula_str: str,
+    *,
+    known_predicates: frozenset[Predicate],
+) -> frozenset[GroundAtom]:
+    assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
+    formula_str = remove_comments(formula_str)
+
+    if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
+        return frozenset()
+
+    matches = re.match(rf"\(([a-zA-Z0-9_\-\=]+)(?:\s+([\w\W]+))?\)", formula_str)
+    if matches is None:
+        raise ValueError(
+            "Syntax error: Invalid formula definition %s (expecting ({formula_name} {formula_args..}))" % formula_str
+        )
+    formula_name = matches.group(1)
+    formula_content = matches.group(2)
+
+    if is_a_keyword(formula_name):
+        try:
+            terms = list(
+                map(
+                    lambda t: parse_ground_formula(t, known_predicates=known_predicates),
+                    parentheses_groups(formula_content.strip()) if formula_content is not None else [],
+                )
+            )
+        except AssertionError:
+            raise ValueError(f"Syntax error: {formula_content} is not a valid formula")
+
+        if formula_name == "and":
+            return frozenset(t for ts in terms for t in ts)
+        elif formula_name == "not":
+            if len(terms) != 1:
+                raise ValueError(f"Syntax error: Not operator must have one argument: {formula_str}")
+            return frozenset(Not(t) for t in terms[0])
         else:
-            assert known_predicates is not None
-            atom = _parse_ground_atom(formula_str, known_predicates=known_predicates)
-            return {atom}
+            raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
+    else:
+        atom = _parse_ground_atom(formula_str, known_predicates=known_predicates)
+        return frozenset({atom})
 
 
 def parse_operator(
-    operator_str: str, *, previous_action: Optional[Operator] = None, known_predicates: Optional[frozenset[Predicate]] = None
+    operator_str: str,
+    *,
+    previous_action: Optional[Operator] = None,
+    known_predicates: Optional[frozenset[Predicate]] = None,
 ):
     operator_str = remove_comments(operator_str)
     matches = re.match(rf"\(:action ({name_rgx})([\w\W]+)\)", operator_str.strip())
@@ -365,13 +412,18 @@ def parse_operator(
                 raise ValueError("Parsing parameters in `%s`: %s" % (action_name, str(e)))
         elif var_type == ":precondition":
             try:
-                preconditions = parse_formula(var_content, known_predicates=known_predicates, variables=parameters)
+                preconditions = parse_lifted_formula(
+                    var_content, known_predicates=known_predicates, variables=parameters
+                )
             except ValueError as e:
                 raise ValueError("Parsing precondition in `%s`: %s" % (action_name, str(e)))
         elif var_type == ":effect":
             try:
-                effects = parse_formula(
-                    var_content, known_predicates=known_predicates, variables=parameters, unsupported_formulas=["or", "exists"]
+                effects = parse_lifted_formula(
+                    var_content,
+                    known_predicates=known_predicates,
+                    variables=parameters,
+                    unsupported_formulas=["or", "exists"],
                 )
             except ValueError as e:
                 raise ValueError("Parsing effect in `%s`: %s" % (action_name, str(e)))

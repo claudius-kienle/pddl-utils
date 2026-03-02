@@ -1,12 +1,16 @@
+from pddl_utils.structs.structs_parser import parse_ground_formula
+from pddl_utils.structs.structs_parser import collect_inferred_predicates
 import re
-from typing import Sequence
-from pddl_utils.structs.structs import NamedPredicate, Object, Operator, Predicate, LiteralConjunction
+from pddl_utils.structs.structs import (
+    NamedPredicate,
+    Object,
+    Operator,
+)
 from pddl_utils.structs.pddl_structs import PDDLDomain, PDDLProblem
 
 
 from pddl_utils.structs.string_utils import remove_comments, parentheses_groups
 from pddl_utils.structs.structs_parser import (
-    parse_formula,
     parse_ground_atom,
     parse_objects,
     parse_operator,
@@ -59,8 +63,23 @@ def parse_domain(domain_str: str):
     )
 
 
-def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
-    """Parse a PDDL problem string and return a PDDLProblem object."""
+def parse_problem(
+    problem_str: str,
+    domain: PDDLDomain | None,
+    predicates: frozenset[NamedPredicate] | None = None,
+) -> PDDLProblem:
+    """Parse a PDDL problem string and return a PDDLProblem object.
+
+    Predicate resolution priority:
+    1. If *domain* is given, its predicates are used for type-checking.
+    2. If *predicates* is given directly, those are used.
+    3. If neither is provided, predicates are inferred from the ground atoms
+       in :init and :goal by matching argument positions to the declared object types.
+    """
+    if domain is not None:
+        assert predicates is None, "Cannot specify both a domain and predicates"
+        predicates = frozenset(domain.predicates)
+
     problem_str = remove_comments(problem_str, ";")
 
     # Extract the main problem content
@@ -73,9 +92,13 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
 
     # Initialize variables
     domain_name = None
-    objects: Sequence[Object] = []
+    objects: frozenset[Object] = frozenset()
     init_facts = set()
     goal = None
+
+    # Determine whether to infer predicates from ground atoms.
+    infer_predicates = predicates is None
+    known_predicates: set[NamedPredicate] = set(predicates) if predicates is not None else set()
 
     # Parse the problem content
     for next_group in parentheses_groups(problem_content):
@@ -91,18 +114,23 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
         elif section_type == ":objects":
             # Parse objects in format: obj1 obj2 ... - type1 obj3 obj4 - type2
             if section_content.strip():
-                objects = parse_objects(section_content)
+                objects = frozenset(parse_objects(section_content))
         elif section_type == ":init":
             if section_content.strip():
-                # Split the init content into individual facts (handle parentheses properly)
-                facts_text = section_content
-                for fact_str in parentheses_groups(facts_text):
-                    fact_atom = parse_ground_atom(fact_str, known_predicates=frozenset(domain.predicates))
+                for fact_str in parentheses_groups(section_content):
+                    if infer_predicates:
+                        known_predicates |= collect_inferred_predicates(fact_str, objects)
+                    fact_atom = parse_ground_atom(fact_str, known_predicates=frozenset(known_predicates))
                     init_facts.add(fact_atom)
         elif section_type == ":goal":
             # Parse goal condition
             if section_content.strip():
-                goal = parse_formula(section_content, only_variables=False, known_predicates=frozenset(domain.predicates))
+                if infer_predicates:
+                    known_predicates |= collect_inferred_predicates(section_content, objects)
+                goal = parse_ground_formula(
+                    section_content,
+                    known_predicates=frozenset(known_predicates),
+                )
 
     # Validate required fields
     if domain_name is None:
@@ -113,7 +141,7 @@ def parse_problem(problem_str: str, domain: PDDLDomain) -> PDDLProblem:
     return PDDLProblem(
         problem_name=problem_name,
         domain_name=domain_name,
-        objects=frozenset(objects),
+        objects=objects,
         init=frozenset(init_facts),
         goal=frozenset(goal),
     )

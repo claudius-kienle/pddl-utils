@@ -969,20 +969,20 @@ class Operator:
         assert isinstance(other, Operator)
         return str(self) > str(other)
 
-    def copy_with(self, **kwargs: Any) -> Operator:
-        """Create a copy of the operator, optionally while replacing any of the
-        arguments."""
-        default_kwargs = dict(
-            name=self.name,
-            parameters=self.parameters,
-            preconditions=self.preconditions,
-            effects=self.effects,
+    def copy_with(
+        self,
+        name: str | None = None,
+        parameters: Sequence[Variable] | None = None,
+        preconditions: LiftedFormula | None = None,
+        effects: LiftedFormula | None = None,
+    ) -> Operator:
+        """Create a copy of the operator, optionally replacing selected fields."""
+        return Operator(
+            name=name if name is not None else self.name,
+            parameters=parameters if parameters is not None else self.parameters,
+            preconditions=preconditions if preconditions is not None else self.preconditions,
+            effects=effects if effects is not None else self.effects,
         )
-        assert set(kwargs.keys()).issubset(default_kwargs.keys())
-        default_kwargs.update(kwargs)
-        # mypy is known to have issues with this pattern:
-        # https://github.com/python/mypy/issues/5382
-        return Operator(**default_kwargs)  # type: ignore
 
     def get_complexity(self) -> float:
         """Get the complexity of this operator.

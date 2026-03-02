@@ -10,3 +10,10 @@ dependencies = ["python-utils"]
 [project.optional-dependencies]
 test = ["pytest>=6.0", "pytest-cov"]
 docker = ["docker"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
