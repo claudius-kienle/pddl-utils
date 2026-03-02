@@ -4,6 +4,7 @@ Code copied from https://github.com/ronuchit/pddlgym_planners/blob/master/pddlgy
 """
 
 import os
+import tempfile
 import time
 import abc
 from typing import Literal, Union, overload
@@ -67,6 +68,61 @@ class Planner:
             return pddl_plan, output
         else:
             return pddl_plan
+
+    @overload
+    def plan_from_pddl_str(
+        self,
+        dom_str: str,
+        prob_str: str,
+        horizon=float("inf"),
+        timeout: int = 10,
+        return_output: Literal[True] = True,
+        fix_capitalization: bool = True,
+    ) -> tuple[SasPlan, str]: ...
+    @overload
+    def plan_from_pddl_str(
+        self,
+        dom_str: str,
+        prob_str: str,
+        horizon=float("inf"),
+        timeout: int = 10,
+        return_output: Literal[False] = False,
+        fix_capitalization: bool = True,
+    ) -> SasPlan: ...
+    def plan_from_pddl_str(
+        self, dom_str, prob_str, horizon=float("inf"), timeout=10, return_output=False, fix_capitalization=True
+    ) -> Union[SasPlan, tuple[SasPlan, str]]:
+        """Plan from PDDL domain and problem strings using temporary files."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".pddl", delete=False) as dom_f:
+            dom_f.write(dom_str)
+            dom_file = dom_f.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".pddl", delete=False) as prob_f:
+            prob_f.write(prob_str)
+            prob_file = prob_f.name
+        try:
+            if return_output:
+                return self.plan_from_pddl(
+                    dom_file,
+                    prob_file,
+                    horizon=horizon,
+                    timeout=timeout,
+                    remove_files=False,
+                    return_output=True,
+                    fix_capitalization=fix_capitalization,
+                )
+            else:
+                return self.plan_from_pddl(
+                    dom_file,
+                    prob_file,
+                    horizon=horizon,
+                    timeout=timeout,
+                    remove_files=False,
+                    return_output=False,
+                    fix_capitalization=fix_capitalization,
+                )
+        finally:
+            os.remove(dom_file)
+            os.remove(prob_file)
 
     @abc.abstractmethod
     def _run(self, dom_file, prob_file, timeout) -> str:
