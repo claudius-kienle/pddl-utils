@@ -112,7 +112,7 @@ class PDDLProblem:
         elif isinstance(self.goal, GroundAtom):
             pass
         elif self.goal is not None:
-            raise ValueError("Goal must be a GroundAtom or LiteralConjunction.")
+            raise ValueError("Goal must be a GroundAtom or set of GroundAtoms.")
 
     @property
     def goal_list(self) -> frozenset[GroundAtom]:

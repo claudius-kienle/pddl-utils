@@ -356,9 +356,10 @@ class _Atom:
         """Get a string representation suitable for writing out to a PDDL
         file."""
         if not self.entities:
-            return f"({self.predicate.name})"
-        entities_str = " ".join(e.name for e in self.entities)
-        pddl_str = f"({self.predicate.name} {entities_str})"
+            pddl_str = f"({self.predicate.name})"
+        else:
+            entities_str = " ".join(e.name for e in self.entities)
+            pddl_str = f"({self.predicate.name} {entities_str})"
         if self.predicate.is_negated:
             pddl_str = f"(not {pddl_str})"
         return pddl_str
@@ -656,7 +657,29 @@ class ForAll(LiftedFormulaStrMixin):
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether the forall quantification holds."""
-        raise RuntimeError("ForAll is a effect.")
+        from pddl_utils.utils.structs_functs import (
+            get_objects_in_state,
+            get_objects_by_type,
+        )
+
+        objects = get_objects_in_state(state)
+        objs_by_type = get_objects_by_type(objects)
+
+        # Get objects for each variable type
+        objs_for_vars = []
+        for var in self.variables:
+            objs_w_type = objs_by_type.get(var.type, set())
+            objs_for_vars.append(list(objs_w_type))
+
+        # Body must hold for all combinations
+        for obj_combo in product(*objs_for_vars):
+            var_sub = dict(sub)
+            var_sub.update(dict(zip(self.variables, obj_combo)))
+            if not self.body.evaluate(var_sub, state):
+                return True if self.is_negative else False
+
+        # Body holds for all combinations
+        return False if self.is_negative else True
 
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL file."""
