@@ -11,7 +11,7 @@ from typing import Literal, Union, overload
 
 from pddl_utils.structs.sas_parser import parse_sas_plan
 from pddl_utils.structs.sas_structs import SasPlan, SasAction
-from pddl_utils.structs.pddl_structs_parser import parse_domain
+from pddl_utils.structs.pddl_structs_parser import parse_domain, parse_problem
 
 
 class Planner:
@@ -62,7 +62,7 @@ class Planner:
         
         # Map lowercase action names to correctly capitalized operator names from domain
         if fix_capitalization:
-            pddl_plan = self._fix_action_capitalization(pddl_plan, dom_file)
+            pddl_plan = self._fix_capitalization(pddl_plan, dom_file, prob_file)
         
         if return_output:
             return pddl_plan, output
@@ -132,25 +132,31 @@ class Planner:
     def _output_to_plan(self, output):
         raise NotImplementedError("Override me!")
 
-    def _fix_action_capitalization(self, plan: SasPlan, dom_file: str) -> SasPlan:
-        """Fix action names to match the capitalization in the domain file.
+    def _fix_capitalization(self, plan: SasPlan, dom_file: str, prob_file: str) -> SasPlan:
+        """Fix action and object names to match the capitalization in the domain and problem files.
         
-        Fast Downward outputs lowercase action names, but the original domain may have
-        capitalized operator names. This method reads the domain and maps the lowercase
-        names to their correctly capitalized versions.
+        Fast Downward outputs lowercase action and object names, but the original domain/problem
+        may have capitalized operator and object names. This method reads the domain and problem
+        and maps the lowercase names to their correctly capitalized versions.
         """
         with open(dom_file, 'r') as f:
             domain_str = f.read()
         domain = parse_domain(domain_str)
         
+        with open(prob_file, 'r') as f:
+            problem_str = f.read()
+        problem = parse_problem(problem_str, domain)
+        
         # Create case-insensitive mapping from lowercase to correct name
         operator_map = {op.name.lower(): op.name for op in domain.operators}
+        object_map = {obj.name.lower(): obj.name for obj in problem.objects}
         
-        # Update action names in the plan
+        # Update action names and object names in the plan
         fixed_actions = []
         for action in plan.actions:
             correct_name = operator_map.get(action.name.lower(), action.name)
-            fixed_actions.append(SasAction(name=correct_name, args=action.args))
+            fixed_args = [object_map.get(arg.lower(), arg) for arg in action.args]
+            fixed_actions.append(SasAction(name=correct_name, args=fixed_args))
         
         return SasPlan(actions=fixed_actions)
 
