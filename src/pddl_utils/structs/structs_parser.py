@@ -325,7 +325,7 @@ def parse_ground_formula(
     *,
     known_predicates: frozenset[Predicate],
 ) -> frozenset[GroundAtom]:
-    assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
+    assert formula_str[0] == "(" and formula_str[-1] == ")", f"The formula \n{formula_str}\nmust start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
     if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
