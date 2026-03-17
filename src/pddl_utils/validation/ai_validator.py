@@ -1,3 +1,4 @@
+from pddl_utils import VAL
 import logging
 import re
 from typing import Optional, Tuple
@@ -6,7 +7,7 @@ from typing import Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-class AIValidator:
+class AIValidator(VAL):
 
     def validate_plan_executes_successfully(self, domain: str, problem: str, plan: str):
         response, success = self.validate(domain=domain, problem=problem, plan=plan, options="-v")
