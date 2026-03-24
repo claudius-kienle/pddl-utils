@@ -134,6 +134,13 @@ class PDDLProblem:
             return next(iter(self.goal_list)).pddl_str()
         return "(and \n\t{}\n)".format("\n\t".join([atom.pddl_str() for atom in sorted(self.goal_list, key=str)]))
 
+    def get_object_by_name(self, name: str) -> Object:
+        """Get an object by its name."""
+        for obj in self.objects:
+            if obj.name.lower() == name.lower():
+                return obj
+        raise ValueError(f"Object with name '{name}' not found in problem objects.")
+
     def to_string(self):
         """Create PDDL problem string"""
         objects_str = self.objects_pddl_str()
