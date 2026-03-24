@@ -275,6 +275,11 @@ class Predicate:
         assert self._classifier is not None
         return not self._classifier(state, objects)
 
+    def not_negated(self) -> Predicate:
+        if not self.is_negated:
+            return self
+        return self.get_negation()
+
     def __eq__(self, other: object) -> bool:
         assert isinstance(other, Predicate)
         return str(self) == str(other)
