@@ -117,6 +117,16 @@ class Type:
     def __hash__(self) -> int:
         return hash((self.name, tuple(self.feature_names)))
 
+    def is_instance(self, t: Type) -> bool:
+        """Return whether this entity is an instance of the given type, taking
+        hierarchical typing into account."""
+        cur_type: Optional[Type] = self
+        while cur_type is not None:
+            if cur_type == t:
+                return True
+            cur_type = cur_type.parent
+        return False
+
 
 @dataclass(frozen=True, order=True, repr=False)
 class _TypedEntity:
@@ -158,12 +168,7 @@ class _TypedEntity:
     def is_instance(self, t: Type) -> bool:
         """Return whether this entity is an instance of the given type, taking
         hierarchical typing into account."""
-        cur_type: Optional[Type] = self.type
-        while cur_type is not None:
-            if cur_type == t:
-                return True
-            cur_type = cur_type.parent
-        return False
+        return self.type.is_instance(t)
 
 
 @dataclass(frozen=True, order=True, repr=False)
@@ -368,6 +373,10 @@ class _Atom:
         if self.predicate.is_negated:
             pddl_str = f"(not {pddl_str})"
         return pddl_str
+
+    def not_negated(self) -> _Atom:
+        """Return a negated version of this atom."""
+        return self.predicate.not_negated()(self.entities)
 
     def __hash__(self) -> int:
         return self._hash
