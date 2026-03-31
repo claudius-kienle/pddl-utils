@@ -1,8 +1,8 @@
-from pddl_utils import GroundConjunction
 import logging
 from typing import List
 
 from pddl_utils import GroundAtom, Not, PDDLDomain, PDDLProblem, SasPlan, SasAction, Object
+from pddl_utils.structs.structs import LiftedAtom, LiteralConjunction
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def get_next_state(
         problem_name="ai_problem",
         objects=objects,
         init=current_state,
-        goal=GroundConjunction([]),
+        goal=LiteralConjunction([]),
     )
     next_state = get_states(domain=domain, problem=problem, actions=SasPlan(actions=[action]))[-1]
     return next_state
@@ -70,7 +70,7 @@ def get_next_problem(
         problem_name="ai_subproblem",
         objects=objects,
         init=current_state,
-        goal=GroundConjunction(formulas=list(goal)),
+        goal=LiteralConjunction(literals=[LiftedAtom(a.predicate, list(a.entities)) for a in goal]),
     )
 
 
@@ -84,7 +84,7 @@ def get_problems(domain: PDDLDomain, problem: PDDLProblem, actions: SasPlan) -> 
             domain_name=domain.domain_name,
             objects=problem.objects,
             init=state_transitions[i],
-            goal=GroundConjunction(formulas=list(state_transitions[i + 1])),
+            goal=LiteralConjunction(literals=[LiftedAtom(a.predicate, list(a.entities)) for a in state_transitions[i + 1]]),
         )
         problems.append(step_problem)
 

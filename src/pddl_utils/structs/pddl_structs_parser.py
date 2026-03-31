@@ -1,5 +1,4 @@
-from pddl_utils.structs.structs_parser import parse_ground_formula
-from pddl_utils.structs.structs_parser import collect_inferred_predicates
+from pddl_utils.structs.structs_parser import collect_inferred_predicates, parse_lifted_formula
 import re
 from pddl_utils.structs.structs import (
     NamedPredicate,
@@ -127,9 +126,10 @@ def parse_problem(
             if section_content.strip():
                 if infer_predicates:
                     known_predicates |= collect_inferred_predicates(section_content, objects)
-                goal = parse_ground_formula(
+                goal = parse_lifted_formula(
                     section_content,
                     known_predicates=frozenset(known_predicates),
+                    known_objects=objects,
                 )
 
     # Validate required fields

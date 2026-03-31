@@ -14,9 +14,6 @@ from .structs import (
     LiftedFormula,
     ForAll,
     Exists,
-    GroundConjunction,
-    GroundDisjunction,
-    GroundFormula,
 )
 from .sas_structs import SasAction, SasPlan
 from .pddl_structs import PDDLDomain, PDDLProblem
@@ -40,9 +37,6 @@ __all__ = [
     "Exists",
     "PDDLDomain",
     "PDDLProblem",
-    "GroundConjunction",
-    "GroundDisjunction",
-    "GroundFormula",
     "parse_domain",
     "parse_problem",
     "SasAction",

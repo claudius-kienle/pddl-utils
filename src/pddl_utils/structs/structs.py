@@ -467,11 +467,8 @@ class LiftedAtom(_Atom):
 
     @cached_property
     def variables(self) -> list[Variable]:
-        """Arguments for this lifted atom.
-
-        A list of "Variable"s.
-        """
-        return [cast(Variable, ent) for ent in self.entities]
+        """Variable arguments for this lifted atom (excludes object constants)."""
+        return [cast(Variable, ent) for ent in self.entities if isinstance(ent, Variable)]
 
     @cached_property
     def used_predicates(self) -> set[Predicate]:
@@ -483,19 +480,21 @@ class LiftedAtom(_Atom):
 
     @cached_property
     def _str(self) -> str:
-        return str(self.predicate) + "(" + ", ".join(map(str, self.variables)) + ")"
+        return str(self.predicate) + "(" + ", ".join(map(str, self.entities)) + ")"
 
     def ground(
         self, sub: VarToObjSub, state: frozenset[GroundAtom]
     ) -> frozenset[GroundAtom]:
-        """Create a GroundAtom with a given substitution."""
+        """Create a GroundAtom with a given substitution. Object constants pass through."""
         assert set(self.variables).issubset(set(sub.keys()))
-        return frozenset({GroundAtom(self.predicate, [sub[v] for v in self.variables])})
+        entities = [sub[ent] if isinstance(ent, Variable) else cast(Object, ent) for ent in self.entities]
+        return frozenset({GroundAtom(self.predicate, entities)})
 
     def substitute(self, sub: VarToVarSub) -> LiftedAtom:
-        """Create a LiftedAtom with a given substitution."""
+        """Create a LiftedAtom with a given substitution. Object constants pass through."""
         assert set(self.variables).issubset(set(sub.keys()))
-        return LiftedAtom(self.predicate, [sub[v] for v in self.variables])
+        entities = [sub[ent] if isinstance(ent, Variable) else ent for ent in self.entities]
+        return LiftedAtom(self.predicate, entities)
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this lifted atom holds given a substitution and state."""
@@ -529,29 +528,6 @@ class GroundAtom(_Atom):
         """Check whether this ground atom holds in the given state."""
         return self.predicate.holds(state, self.objects)
 
-
-@dataclass(frozen=True, repr=False, eq=False)
-class GroundConjunction:
-    """A conjunction (AND) of ground formulas. Mirrors LiteralConjunction."""
-
-    formulas: Sequence[GroundFormula]
-
-    def pddl_str(self) -> str:
-        if len(self.formulas) == 1:
-            return self.formulas[0].pddl_str()
-        return "(and {})".format(" ".join(f.pddl_str() for f in self.formulas))
-
-
-@dataclass(frozen=True, repr=False, eq=False)
-class GroundDisjunction:
-    """A disjunction (OR) of ground formulas. Mirrors LiteralDisjunction."""
-
-    formulas: Sequence[GroundFormula]
-
-    def pddl_str(self) -> str:
-        if len(self.formulas) == 1:
-            return self.formulas[0].pddl_str()
-        return "(or {})".format(" ".join(f.pddl_str() for f in self.formulas))
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -1152,14 +1128,6 @@ def Not(x: LiteralConjunction) -> LiteralDisjunction: ...
 def Not(x: LiteralDisjunction) -> LiteralConjunction: ...
 
 
-@overload
-def Not(x: GroundConjunction) -> GroundDisjunction: ...
-
-
-@overload
-def Not(x: GroundDisjunction) -> GroundConjunction: ...
-
-
 def Not(
     x: Union[
         Predicate,
@@ -1172,8 +1140,6 @@ def Not(
         EqualTo,
         LiteralConjunction,
         LiteralDisjunction,
-        GroundConjunction,
-        GroundDisjunction,
     ],
 ) -> Union[
     Predicate,
@@ -1186,8 +1152,6 @@ def Not(
     EqualTo,
     LiteralConjunction,
     LiteralDisjunction,
-    GroundConjunction,
-    GroundDisjunction,
 ]:
     """Negate a Predicate, Atom, or other logical structure."""
     if isinstance(x, Predicate):
@@ -1234,19 +1198,11 @@ def Not(
                 negated_literals.append(negated_lit)
         return LiteralConjunction(negated_literals)
 
-    if isinstance(x, GroundConjunction):
-        # Apply De Morgan's law: NOT(A AND B) = (NOT A) OR (NOT B)
-        return GroundDisjunction([Not(f) for f in x.formulas if isinstance(f, GroundAtom)])
-
-    if isinstance(x, GroundDisjunction):
-        # Apply De Morgan's law: NOT(A OR B) = (NOT A) AND (NOT B)
-        return GroundConjunction([Not(f) for f in x.formulas if isinstance(f, GroundAtom)])
-
     if isinstance(x, (LiftedAtom, GroundAtom)):
         # Create a negated predicate and apply it to the same entities
         negated_predicate = Not(x.predicate)
         if isinstance(x, LiftedAtom):
-            return LiftedAtom(negated_predicate, x.variables)
+            return LiftedAtom(negated_predicate, list(x.entities))
         else:  # GroundAtom
             return GroundAtom(negated_predicate, x.objects)
 
@@ -1263,8 +1219,7 @@ LiftedOrGroundAtom = TypeVar("LiftedOrGroundAtom", LiftedAtom, GroundAtom, _Atom
 ObjectOrVariable = TypeVar("ObjectOrVariable", bound=_TypedEntity)
 
 
-# Ground-level analog of LiftedFormula.
-GroundFormula = Union[GroundAtom, GroundConjunction, GroundDisjunction]
+# Ground atoms (predicate applied to objects only).
 AbstractState = frozenset[GroundAtom]
 
 # Type alias for all lifted formula types that implement LiftedFormulaBase interface

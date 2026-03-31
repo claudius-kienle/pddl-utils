@@ -1,14 +1,15 @@
-from numpy.lib._arraysetops_impl import isin
 from dataclasses import dataclass
 
 from pddl_utils.structs.structs import (
     AbstractState,
+    LiftedAtom,
+    LiftedFormula,
+    LiteralConjunction,
     Operator,
     NamedPredicate,
     Type,
     Object,
     GroundAtom,
-    GroundFormula,
 )
 
 
@@ -107,19 +108,30 @@ class PDDLProblem:
     domain_name: str
     objects: frozenset[Object]
     init: AbstractState
-    goal: GroundFormula
+    goal: LiftedFormula
 
     def __post_init__(self):
         assert not isinstance(self.goal, frozenset)
+        if self.goal is not None:
+            assert not self.goal.exposed_variables, \
+                f"Goal must not have free (unquantified) variables: {self.goal.exposed_variables}"
 
     @property
     def goal_list(self) -> AbstractState:
         if self.goal is None:
             return frozenset()
-        elif isinstance(self.goal, GroundAtom):
-            return frozenset({self.goal})
-        else:
-            return frozenset(f for f in self.goal.formulas if isinstance(f, GroundAtom))
+        elif isinstance(self.goal, LiftedAtom) and not self.goal.variables:
+            # Pure ground lifted atom (all-object entities)
+            return frozenset({GroundAtom(self.goal.predicate, list(self.goal.entities))})
+        elif isinstance(self.goal, LiteralConjunction):
+            result = set()
+            for lit in self.goal.literals:
+                if isinstance(lit, LiftedAtom) and not lit.variables:
+                    result.add(GroundAtom(lit.predicate, list(lit.entities)))
+                elif isinstance(lit, GroundAtom):
+                    result.add(lit)
+            return frozenset(result)
+        return frozenset()
 
     @property
     def init_str(self) -> str:
@@ -181,7 +193,7 @@ class PDDLProblem:
         domain_name: str | None = None,
         objects: frozenset[Object] | None = None,
         init: AbstractState | None = None,
-        goal: GroundFormula | None = None,
+        goal: LiftedFormula | None = None,
     ):
         return PDDLProblem(
             problem_name=problem_name if problem_name is not None else self.problem_name,

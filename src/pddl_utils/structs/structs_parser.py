@@ -4,9 +4,6 @@ from pddl_utils.structs.structs import (
     Exists,
     ForAll,
     GroundAtom,
-    GroundConjunction,
-    GroundDisjunction,
-    GroundFormula,
     LiftedAtom,
     NamedPredicate,
     LiftedFormula,
@@ -119,13 +116,17 @@ def parse_objects(content_str: str) -> Sequence[Object]:
 
 
 def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
-    result = parse_ground_formula(ground_atom_str, known_predicates=known_predicates)
-    assert isinstance(result, GroundAtom), f"Expected a single ground atom, got: {result}"
-    return result
+    return _parse_ground_atom(ground_atom_str, known_predicates=known_predicates)
 
 
 def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
     assert ground_atom_str[0] == "(" and ground_atom_str[-1] == ")", "The predicate must start and end with parentheses"
+
+    not_match = re.match(r"^\(not\s+(\([\w\W]+\))\)$", ground_atom_str.strip())
+    if not_match:
+        inner = not_match.group(1)
+        return Not(_parse_ground_atom(inner, known_predicates=known_predicates))
+
     assert (
         ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
     ), f"Invalid syntax: '{str(ground_atom_str)}' is not a valid predicate. Maybe you forgot an operator?"
@@ -236,11 +237,50 @@ def parse_lifted_atom(lifted_atom_str: str, *, known_predicates: Optional[frozen
     )
 
 
+def _parse_mixed_atom(
+    atom_str: str,
+    *,
+    known_predicates: frozenset[Predicate],
+    known_variables: dict[str, Variable],
+    known_objects: dict[str, Object],
+) -> LiftedAtom:
+    """Parse an atom whose arguments may be variables (?-prefixed) or object constants.
+
+    Used inside quantified goal formulas (exists/forall) where the body can reference
+    both the quantifier's variables and objects from the problem.
+    """
+    assert atom_str[0] == "(" and atom_str[-1] == ")"
+    matches = re.match(rf"\(({name_rgx}) *(?: +([\w\W]+))?\)", atom_str)
+    if matches is None:
+        raise ValueError(f"Syntax error: Invalid atom definition {atom_str}")
+    predicate_name = matches.group(1)
+    args_str = matches.group(2)
+    arg_names = args_str.split() if args_str else []
+
+    predicate = next((p for p in known_predicates if p.name == predicate_name), None)
+    if predicate is None:
+        raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
+
+    entities: list[Variable | Object] = []
+    for arg_name in arg_names:
+        if arg_name.startswith("?"):
+            if arg_name not in known_variables:
+                raise ValueError(f"Variable {arg_name} is not in scope.")
+            entities.append(known_variables[arg_name])
+        else:
+            if arg_name not in known_objects:
+                raise ValueError(f"Object {arg_name} is not known in the current context.")
+            entities.append(known_objects[arg_name])
+
+    return LiftedAtom(predicate, entities)
+
+
 def parse_lifted_formula(
     formula_str: str,
     *,
     known_predicates: Optional[frozenset[Predicate]] = None,
     variables: Optional[Sequence[Variable]] = None,
+    known_objects: Optional[frozenset[Object]] = None,
     unsupported_formulas: Optional[list[str]] = None,
 ) -> LiftedFormula:
     assert formula_str[0] == "(" and formula_str[-1] == ")", "The formula must start and end with parentheses"
@@ -271,6 +311,7 @@ def parse_lifted_formula(
                 conditions_str,
                 known_predicates=known_predicates,
                 variables=merged_variables,
+                known_objects=known_objects,
                 unsupported_formulas=unsupported_formulas,
             )
             if formula_name == "forall":
@@ -294,6 +335,7 @@ def parse_lifted_formula(
                         t,
                         known_predicates=known_predicates,
                         variables=variables,
+                        known_objects=known_objects,
                         unsupported_formulas=unsupported_formulas,
                     ),
                     parentheses_groups(formula_content.strip()) if formula_content is not None else [],
@@ -320,6 +362,16 @@ def parse_lifted_formula(
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
             # raise NotImplementedError(str(formula_str))
     else:
+        if known_objects is not None and known_predicates is not None:
+            # Mixed context (e.g. inside goal exists/forall): resolve constants from known_objects
+            vars_by_name = {v.name: v for v in variables} if variables else {}
+            objs_by_name = {o.name: o for o in known_objects}
+            return _parse_mixed_atom(
+                formula_str,
+                known_predicates=known_predicates,
+                known_variables=vars_by_name,
+                known_objects=objs_by_name,
+            )
         return parse_lifted_atom(formula_str, known_predicates=known_predicates)
 
 
@@ -327,44 +379,9 @@ def parse_ground_formula(
     formula_str: str,
     *,
     known_predicates: frozenset[Predicate],
-) -> GroundFormula:
-    assert formula_str[0] == "(" and formula_str[-1] == ")", f"The formula \n{formula_str}\nmust start and end with parentheses"
-    formula_str = remove_comments(formula_str)
-
-    if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
-        return GroundConjunction(formulas=[])
-
-    matches = re.match(rf"\(([a-zA-Z0-9_\-\=]+)(?:\s+([\w\W]+))?\)", formula_str)
-    if matches is None:
-        raise ValueError(
-            "Syntax error: Invalid formula definition %s (expecting ({formula_name} {formula_args..}))" % formula_str
-        )
-    formula_name = matches.group(1)
-    formula_content = matches.group(2)
-
-    if is_a_keyword(formula_name):
-        try:
-            terms = list(
-                map(
-                    lambda t: parse_ground_formula(t, known_predicates=known_predicates),
-                    parentheses_groups(formula_content.strip()) if formula_content is not None else [],
-                )
-            )
-        except AssertionError:
-            raise ValueError(f"Syntax error: {formula_content} is not a valid formula")
-
-        if formula_name == "and":
-            return GroundConjunction(terms)
-        elif formula_name == "not":
-            if len(terms) != 1:
-                raise ValueError(f"Syntax error: Not operator must have one argument: {formula_str}")
-            return Not(terms[0])
-        elif formula_name == "or":
-            return GroundDisjunction(terms)
-        else:
-            raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
-    else:
-        return _parse_ground_atom(formula_str, known_predicates=known_predicates)
+) -> GroundAtom:
+    """Parse a single ground atom (predicate applied to objects only)."""
+    return parse_ground_atom(remove_comments(formula_str), known_predicates=known_predicates)
 
 
 def parse_operator(
