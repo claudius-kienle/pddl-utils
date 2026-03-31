@@ -143,5 +143,5 @@ def parse_problem(
         domain_name=domain_name,
         objects=objects,
         init=frozenset(init_facts),
-        goal=frozenset(goal),
+        goal=goal,
     )

@@ -24,6 +24,7 @@ from .validation.ai_validator import AIValidator
 
 # Structs
 from .structs import (
+    AbstractState,
     Operator,
     GroundOperator,
     Predicate,
@@ -40,6 +41,9 @@ from .structs import (
     Exists,
     PDDLDomain,
     PDDLProblem,
+    GroundConjunction,
+    GroundDisjunction,
+    GroundFormula,
     parse_domain,
     parse_problem,
     SasAction,
@@ -60,6 +64,7 @@ __all__ = [
     "VAL",
     "AIValidator",
     # Structs
+    "AbstractState",
     "Operator",
     "GroundOperator",
     "Predicate",
@@ -76,6 +81,9 @@ __all__ = [
     "Exists",
     "PDDLDomain",
     "PDDLProblem",
+    "GroundConjunction",
+    "GroundDisjunction",
+    "GroundFormula",
     "parse_domain",
     "parse_problem",
     "SasAction",

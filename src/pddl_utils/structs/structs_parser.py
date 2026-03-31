@@ -1,9 +1,12 @@
 import re
-from typing import Literal, Optional, Sequence, overload
+from typing import Optional, Sequence, Union
 from pddl_utils.structs.structs import (
     Exists,
     ForAll,
     GroundAtom,
+    GroundConjunction,
+    GroundDisjunction,
+    GroundFormula,
     LiftedAtom,
     NamedPredicate,
     LiftedFormula,
@@ -116,9 +119,9 @@ def parse_objects(content_str: str) -> Sequence[Object]:
 
 
 def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
-    atom = parse_ground_formula(ground_atom_str, known_predicates=known_predicates)
-    assert isinstance(atom, frozenset) and len(atom) == 1
-    return next(iter(atom))
+    result = parse_ground_formula(ground_atom_str, known_predicates=known_predicates)
+    assert isinstance(result, GroundAtom), f"Expected a single ground atom, got: {result}"
+    return result
 
 
 def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
@@ -324,12 +327,12 @@ def parse_ground_formula(
     formula_str: str,
     *,
     known_predicates: frozenset[Predicate],
-) -> frozenset[GroundAtom]:
+) -> GroundFormula:
     assert formula_str[0] == "(" and formula_str[-1] == ")", f"The formula \n{formula_str}\nmust start and end with parentheses"
     formula_str = remove_comments(formula_str)
 
     if formula_str in ["()", "(and)", "(and )"] or re.fullmatch(r"\(and\s*\)", formula_str):
-        return frozenset()
+        return GroundConjunction(formulas=[])
 
     matches = re.match(rf"\(([a-zA-Z0-9_\-\=]+)(?:\s+([\w\W]+))?\)", formula_str)
     if matches is None:
@@ -351,16 +354,17 @@ def parse_ground_formula(
             raise ValueError(f"Syntax error: {formula_content} is not a valid formula")
 
         if formula_name == "and":
-            return frozenset(t for ts in terms for t in ts)
+            return GroundConjunction(terms)
         elif formula_name == "not":
             if len(terms) != 1:
                 raise ValueError(f"Syntax error: Not operator must have one argument: {formula_str}")
-            return frozenset(Not(t) for t in terms[0])
+            return Not(terms[0])
+        elif formula_name == "or":
+            return GroundDisjunction(terms)
         else:
             raise ValueError("invalid formula name `%s` in `%s`" % (formula_name, formula_str))
     else:
-        atom = _parse_ground_atom(formula_str, known_predicates=known_predicates)
-        return frozenset({atom})
+        return _parse_ground_atom(formula_str, known_predicates=known_predicates)
 
 
 def parse_operator(

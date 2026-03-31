@@ -531,6 +531,30 @@ class GroundAtom(_Atom):
 
 
 @dataclass(frozen=True, repr=False, eq=False)
+class GroundConjunction:
+    """A conjunction (AND) of ground formulas. Mirrors LiteralConjunction."""
+
+    formulas: Sequence[GroundFormula]
+
+    def pddl_str(self) -> str:
+        if len(self.formulas) == 1:
+            return self.formulas[0].pddl_str()
+        return "(and {})".format(" ".join(f.pddl_str() for f in self.formulas))
+
+
+@dataclass(frozen=True, repr=False, eq=False)
+class GroundDisjunction:
+    """A disjunction (OR) of ground formulas. Mirrors LiteralDisjunction."""
+
+    formulas: Sequence[GroundFormula]
+
+    def pddl_str(self) -> str:
+        if len(self.formulas) == 1:
+            return self.formulas[0].pddl_str()
+        return "(or {})".format(" ".join(f.pddl_str() for f in self.formulas))
+
+
+@dataclass(frozen=True, repr=False, eq=False)
 class LiteralConjunction(LiftedFormulaStrMixin):
     """A logical conjunction (AND) of Literals."""
 
@@ -1128,6 +1152,14 @@ def Not(x: LiteralConjunction) -> LiteralDisjunction: ...
 def Not(x: LiteralDisjunction) -> LiteralConjunction: ...
 
 
+@overload
+def Not(x: GroundConjunction) -> GroundDisjunction: ...
+
+
+@overload
+def Not(x: GroundDisjunction) -> GroundConjunction: ...
+
+
 def Not(
     x: Union[
         Predicate,
@@ -1140,6 +1172,8 @@ def Not(
         EqualTo,
         LiteralConjunction,
         LiteralDisjunction,
+        GroundConjunction,
+        GroundDisjunction,
     ],
 ) -> Union[
     Predicate,
@@ -1152,6 +1186,8 @@ def Not(
     EqualTo,
     LiteralConjunction,
     LiteralDisjunction,
+    GroundConjunction,
+    GroundDisjunction,
 ]:
     """Negate a Predicate, Atom, or other logical structure."""
     if isinstance(x, Predicate):
@@ -1198,6 +1234,14 @@ def Not(
                 negated_literals.append(negated_lit)
         return LiteralConjunction(negated_literals)
 
+    if isinstance(x, GroundConjunction):
+        # Apply De Morgan's law: NOT(A AND B) = (NOT A) OR (NOT B)
+        return GroundDisjunction([Not(f) for f in x.formulas if isinstance(f, GroundAtom)])
+
+    if isinstance(x, GroundDisjunction):
+        # Apply De Morgan's law: NOT(A OR B) = (NOT A) AND (NOT B)
+        return GroundConjunction([Not(f) for f in x.formulas if isinstance(f, GroundAtom)])
+
     if isinstance(x, (LiftedAtom, GroundAtom)):
         # Create a negated predicate and apply it to the same entities
         negated_predicate = Not(x.predicate)
@@ -1217,6 +1261,11 @@ VarToObjSub = dict[Variable, Object]
 VarToVarSub = dict[Variable, Variable]
 LiftedOrGroundAtom = TypeVar("LiftedOrGroundAtom", LiftedAtom, GroundAtom, _Atom)
 ObjectOrVariable = TypeVar("ObjectOrVariable", bound=_TypedEntity)
+
+
+# Ground-level analog of LiftedFormula.
+GroundFormula = Union[GroundAtom, GroundConjunction, GroundDisjunction]
+AbstractState = frozenset[GroundAtom]
 
 # Type alias for all lifted formula types that implement LiftedFormulaBase interface
 LiftedFormula = Union[

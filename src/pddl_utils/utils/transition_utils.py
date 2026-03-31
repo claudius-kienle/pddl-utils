@@ -1,3 +1,4 @@
+from pddl_utils import GroundConjunction
 import logging
 from typing import List
 
@@ -44,7 +45,7 @@ def get_next_state(
         problem_name="ai_problem",
         objects=objects,
         init=current_state,
-        goal=frozenset(),
+        goal=GroundConjunction([]),
     )
     next_state = get_states(domain=domain, problem=problem, actions=SasPlan(actions=[action]))[-1]
     return next_state
@@ -61,13 +62,15 @@ def get_next_problem(
 
     if effects_for_goal:
         goal = next_state - current_state
+    else:
+        goal = next_state
 
     return PDDLProblem(
         domain_name=domain.domain_name,
         problem_name="ai_subproblem",
         objects=objects,
         init=current_state,
-        goal=goal,
+        goal=GroundConjunction(formulas=list(goal)),
     )
 
 
@@ -81,7 +84,7 @@ def get_problems(domain: PDDLDomain, problem: PDDLProblem, actions: SasPlan) -> 
             domain_name=domain.domain_name,
             objects=problem.objects,
             init=state_transitions[i],
-            goal=state_transitions[i + 1],
+            goal=GroundConjunction(formulas=list(state_transitions[i + 1])),
         )
         problems.append(step_problem)
 

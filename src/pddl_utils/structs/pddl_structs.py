@@ -1,11 +1,14 @@
+from numpy.lib._arraysetops_impl import isin
 from dataclasses import dataclass
 
 from pddl_utils.structs.structs import (
+    AbstractState,
     Operator,
     NamedPredicate,
     Type,
     Object,
     GroundAtom,
+    GroundFormula,
 )
 
 
@@ -103,25 +106,20 @@ class PDDLProblem:
     problem_name: str
     domain_name: str
     objects: frozenset[Object]
-    init: frozenset[GroundAtom]
-    goal: frozenset[GroundAtom] | GroundAtom
+    init: AbstractState
+    goal: GroundFormula
 
     def __post_init__(self):
-        if isinstance(self.goal, frozenset):
-            assert all(isinstance(lit, GroundAtom) for lit in self.goal)
-        elif isinstance(self.goal, GroundAtom):
-            pass
-        elif self.goal is not None:
-            raise ValueError("Goal must be a GroundAtom or set of GroundAtoms.")
+        assert not isinstance(self.goal, frozenset)
 
     @property
-    def goal_list(self) -> frozenset[GroundAtom]:
+    def goal_list(self) -> AbstractState:
         if self.goal is None:
             return frozenset()
-        elif isinstance(self.goal, frozenset):
-            return self.goal
-        else:
+        elif isinstance(self.goal, GroundAtom):
             return frozenset({self.goal})
+        else:
+            return frozenset(f for f in self.goal.formulas if isinstance(f, GroundAtom))
 
     @property
     def init_str(self) -> str:
@@ -130,9 +128,7 @@ class PDDLProblem:
     @property
     def goal_str(self) -> str:
         assert self.goal is not None
-        if isinstance(self.goal, GroundAtom) or len(self.goal_list) == 1:
-            return next(iter(self.goal_list)).pddl_str()
-        return "(and \n\t{}\n)".format("\n\t".join([atom.pddl_str() for atom in sorted(self.goal_list, key=str)]))
+        return self.goal.pddl_str()
 
     def get_object_by_name(self, name: str) -> Object:
         """Get an object by its name."""
@@ -184,8 +180,8 @@ class PDDLProblem:
         problem_name: str | None = None,
         domain_name: str | None = None,
         objects: frozenset[Object] | None = None,
-        init: frozenset[GroundAtom] | None = None,
-        goal: frozenset[GroundAtom] | GroundAtom | None = None,
+        init: AbstractState | None = None,
+        goal: GroundFormula | None = None,
     ):
         return PDDLProblem(
             problem_name=problem_name if problem_name is not None else self.problem_name,

@@ -1,4 +1,5 @@
 from .structs import (
+    AbstractState,
     Operator,
     GroundOperator,
     Predicate,
@@ -13,12 +14,16 @@ from .structs import (
     LiftedFormula,
     ForAll,
     Exists,
+    GroundConjunction,
+    GroundDisjunction,
+    GroundFormula,
 )
 from .sas_structs import SasAction, SasPlan
 from .pddl_structs import PDDLDomain, PDDLProblem
 from .pddl_structs_parser import parse_domain, parse_problem
 
 __all__ = [
+    "AbstractState",
     "Operator",
     "GroundOperator",
     "Predicate",
@@ -35,6 +40,9 @@ __all__ = [
     "Exists",
     "PDDLDomain",
     "PDDLProblem",
+    "GroundConjunction",
+    "GroundDisjunction",
+    "GroundFormula",
     "parse_domain",
     "parse_problem",
     "SasAction",
