@@ -120,7 +120,8 @@ def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predi
 
 
 def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
-    assert ground_atom_str[0] == "(" and ground_atom_str[-1] == ")", "The predicate must start and end with parentheses"
+    if ground_atom_str[0] != "(" or ground_atom_str[-1] != ")":
+        raise ValueError("The predicate must start and end with parentheses")
 
     not_match = re.match(r"^\(not\s+(\([\w\W]+\))\)$", ground_atom_str.strip())
     if not_match:
@@ -195,9 +196,14 @@ def collect_inferred_predicates(
 
 def parse_predicate(predicate_str: str, *, known_predicates: Optional[frozenset[Predicate]] = None) -> NamedPredicate:
     assert predicate_str[0] == "(" and predicate_str[-1] == ")", "The predicate must start and end with parentheses"
-    assert (
-        predicate_str.count("(") == 1 and predicate_str.count(")") == 1
-    ), f"Invalid syntax: '{str(predicate_str)}' is not a valid predicate. Maybe you forgot an operator?"
+    if re.search(r"\(either\b", predicate_str):
+        raise ValueError(
+            f"Unsupported syntax: '(either ...)' type unions are not supported in predicate definitions. Got: {predicate_str}"
+        )
+    if(
+        predicate_str.count("(") != 1 or predicate_str.count(")") != 1
+    ):
+        raise ValueError(f"Invalid syntax: '{str(predicate_str)}' is not a valid predicate. Maybe you forgot an operator?")
 
     matches = re.match(rf"\(({name_rgx}) *(?: +([\w\W]+))?\)", predicate_str)
     if matches is None:
@@ -301,7 +307,25 @@ def parse_lifted_formula(
         raise ValueError(f"Syntax error: Formula `{formula_name}` is not supported in the current context")
 
     if is_a_keyword(formula_name):
-        if formula_name in ["exists", "forall"]:
+        if formula_name == "when":
+            condition_str, effect_str = parentheses_groups(formula_content.strip())
+            # The condition of a when-clause is not an effect, so unsupported_formulas don't apply there
+            condition = parse_lifted_formula(
+                condition_str,
+                known_predicates=known_predicates,
+                variables=variables,
+                known_objects=known_objects,
+                unsupported_formulas=None,
+            )
+            effect = parse_lifted_formula(
+                effect_str,
+                known_predicates=known_predicates,
+                variables=variables,
+                known_objects=known_objects,
+                unsupported_formulas=unsupported_formulas,
+            )
+            return When(condition=condition, effect=effect)
+        elif formula_name in ["exists", "forall"]:
             variables_str, conditions_str = parentheses_groups(formula_content.strip())
             parsed_variables = parse_variable_definitions(variables_str[1:-1])
             # Merge with existing variables
@@ -352,8 +376,6 @@ def parse_lifted_formula(
             if len(terms) != 1:
                 raise ValueError(f"Syntax error: Not operator must have one argument: {formula_str}")
             return Not(terms[0])
-        elif formula_name == "when":
-            return When(condition=terms[0], effect=terms[1])
         elif formula_name == "imply":
             return Imply(*terms)
         elif formula_name in ["if", "implies"]:
