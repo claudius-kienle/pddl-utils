@@ -178,6 +178,7 @@ class Object(_TypedEntity):
 
     def __post_init__(self) -> None:
         assert not self.name.startswith("?")
+        assert " " not in self.name, "Object names cannot contain spaces. Found: {}".format(self.name)
 
     def __hash__(self) -> int:
         # By default, the dataclass generates a new __hash__ method when
