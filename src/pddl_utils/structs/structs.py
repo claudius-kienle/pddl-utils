@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field
 from enum import Enum
-from functools import cached_property, lru_cache
+from functools import cached_property
 from itertools import product
 from typing import (
+    Self,
     overload,
     Any,
     Callable,
@@ -375,7 +376,7 @@ class _Atom:
             pddl_str = f"(not {pddl_str})"
         return pddl_str
 
-    def not_negated(self) -> _Atom:
+    def not_negated(self) -> Self:
         """Return a negated version of this atom."""
         return self.predicate.not_negated()(self.entities)
 
