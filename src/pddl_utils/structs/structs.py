@@ -20,6 +20,7 @@ from typing import (
     Union,
     cast,
 )
+from typing_extensions import Self
 
 
 class Symbols(Enum):
@@ -82,7 +83,7 @@ def is_a_keyword(word: str) -> bool:
     return word in ALL_SYMBOLS
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=False, repr=False)
 class Type:
     """Struct defining a type."""
 
@@ -114,8 +115,32 @@ class Type:
             return Variable(name, self)
         return Object(name, self)
 
+    @cached_property
+    def _str(self) -> str:
+        return f"{self.name}:{tuple(self.feature_names)}"
+
+    @cached_property
+    def _hash(self) -> int:
+        return hash(str(self))
+
+    def __str__(self) -> str:
+        return self._str
+
+    def __repr__(self) -> str:
+        return self._str
+
     def __hash__(self) -> int:
-        return hash((self.name, tuple(self.feature_names)))
+        # By default, the dataclass generates a new __hash__ method when
+        # frozen=True and eq=True, so we need to override it.
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, Type)
+        return str(self) == str(other)
+
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, Type)
+        return str(self) < str(other)
 
     def is_instance(self, t: Type) -> bool:
         """Return whether this entity is an instance of the given type, taking
@@ -127,8 +152,14 @@ class Type:
             cur_type = cur_type.parent
         return False
 
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, Type)
+        return self.name == other.name and self.feature_names == other.feature_names
 
-@dataclass(frozen=True, order=True, repr=False)
+    
+
+
+@dataclass(frozen=True, order=False, repr=False)
 class _TypedEntity:
     """Struct defining an entity with some type, either an object (e.g.,
     block3) or a variable (e.g., ?block).
@@ -160,6 +191,10 @@ class _TypedEntity:
         assert isinstance(other, _TypedEntity)
         return str(self) == str(other)
 
+    def __lt__(self, other: object) -> bool:
+        assert isinstance(other, _TypedEntity)
+        return str(self) < str(other)
+
     def pddl_str(self) -> str:
         """Get a string representation suitable for writing out to a PDDL
         file."""
@@ -171,7 +206,7 @@ class _TypedEntity:
         return self.type.is_instance(t)
 
 
-@dataclass(frozen=True, order=True, repr=False)
+@dataclass(frozen=True, order=False, repr=False)
 class Object(_TypedEntity):
     """Struct defining an Object, which is just a _TypedEntity whose name does
     not start with "?"."""
@@ -374,7 +409,7 @@ class _Atom:
             pddl_str = f"(not {pddl_str})"
         return pddl_str
 
-    def not_negated(self) -> _Atom:
+    def not_negated(self) -> Self:
         """Return a negated version of this atom."""
         return self.predicate.not_negated()(self.entities)
 

@@ -25,7 +25,7 @@ def transition(curr_state: frozenset[GroundAtom], effect: frozenset[GroundAtom])
 
 
 def get_substitutions(variables: Sequence[Variable], objects: frozenset[Object]) -> Generator[VarToObjSub, None, None]:
-    ll_objects_per_arg = [[obj for obj in objects if obj.type == var.type] for var in variables]
+    ll_objects_per_arg = [[obj for obj in sorted(objects) if obj.type == var.type] for var in variables]
     for args in product(*ll_objects_per_arg):
         substitution = {}
         for variable, obj in zip(variables, args):
