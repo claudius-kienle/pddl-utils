@@ -1,4 +1,5 @@
 from .structs import (
+    AbstractState,
     Operator,
     GroundOperator,
     Predicate,
@@ -19,6 +20,7 @@ from .pddl_structs import PDDLDomain, PDDLProblem
 from .pddl_structs_parser import parse_domain, parse_problem
 
 __all__ = [
+    "AbstractState",
     "Operator",
     "GroundOperator",
     "Predicate",

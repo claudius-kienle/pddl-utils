@@ -10,30 +10,35 @@ class SasAction:
     name: str
     args: list[str]
 
-    def validate(self, domain: PDDLDomain, objects: frozenset[Object]) -> list[str]:
+    def validate(self, domain: PDDLDomain, objects: frozenset[Object], *, ignore_action_names: bool = False) -> list[str]:
         """
         Validates the action against the domain.
         :returns a list of errors if the action is invalid, otherwise an empty list.
         """
-        known_operators = {op.name: op for op in domain.operators}
-        if self.name not in known_operators:
-            return [f"Unknown action: {self.name}"]
-
-        if len(self.args) != len(known_operators[self.name].parameters):
-            return [
-                f"Action {self.name} expects {len(known_operators[self.name].parameters)} arguments, but got {len(self.args)}."
-            ]
-
-        action = known_operators[self.name]
-        for arg_name, param in zip(self.args, action.parameters):
+        for arg_name in self.args:
             arg = next(filter(lambda o: o.name == arg_name, objects), None)
             if arg is None:
                 return [f"Unknown object: {arg_name}"]
 
-            if param.type not in domain.parent_types(arg.type):
+        if not ignore_action_names:
+            known_operators = {op.name: op for op in domain.operators}
+            if self.name not in known_operators:
+                return [f"Unknown action: {self.name}"]
+
+            if len(self.args) != len(known_operators[self.name].parameters):
                 return [
-                    f"Object {arg_name} of type {arg.type} is not a valid parameter for action {self.name} of type {param.type}."
+                    f"Action {self.name} expects {len(known_operators[self.name].parameters)} arguments, but got {len(self.args)}."
                 ]
+
+            action = known_operators[self.name]
+            for arg_name, param in zip(self.args, action.parameters):
+                arg = next(filter(lambda o: o.name == arg_name, objects), None)
+                assert arg is not None, f"Unknown object: {arg_name}"
+
+                if param.type not in domain.parent_types(arg.type):
+                    return [
+                        f"Object {arg_name} of type {arg.type} is not a valid parameter for action {self.name} of type {param.type}."
+                    ]
 
         return []
 
@@ -56,6 +61,10 @@ class SasAction:
     def __repr__(self) -> str:
         return self._str
 
+    def __eq__(self, other: object) -> bool:
+        assert isinstance(other, SasAction)
+        return str(self) == str(other)
+
     def __hash__(self) -> int:
         return hash(str(self))
 
@@ -64,14 +73,14 @@ class SasAction:
 class SasPlan:
     actions: list[SasAction]
 
-    def validate(self, domain: PDDLDomain, objects: frozenset[Object]) -> list[str]:
+    def validate(self, domain: PDDLDomain, objects: frozenset[Object], ignore_action_names: bool = False) -> list[str]:
         """
         Validates the plan against the domain.
         :return : A list of error messages if the plan is invalid, otherwise an empty list.
         """
         errors = []
         for action in self.actions:
-            action_errors = action.validate(domain=domain, objects=objects)
+            action_errors = action.validate(domain=domain, objects=objects, ignore_action_names=ignore_action_names)
             errors.extend(action_errors)
         return errors
 

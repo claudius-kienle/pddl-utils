@@ -24,6 +24,7 @@ from .validation.ai_validator import AIValidator
 
 # Structs
 from .structs import (
+    AbstractState,
     Operator,
     GroundOperator,
     Predicate,
@@ -60,6 +61,7 @@ __all__ = [
     "VAL",
     "AIValidator",
     # Structs
+    "AbstractState",
     "Operator",
     "GroundOperator",
     "Predicate",

@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field
 from enum import Enum
-from functools import cached_property, lru_cache
+from functools import cached_property
 from itertools import product
 from typing import (
+    Self,
     overload,
     Any,
     Callable,
@@ -213,6 +214,7 @@ class Object(_TypedEntity):
 
     def __post_init__(self) -> None:
         assert not self.name.startswith("?")
+        assert " " not in self.name, "Object names cannot contain spaces. Found: {}".format(self.name)
 
     def __hash__(self) -> int:
         # By default, the dataclass generates a new __hash__ method when
@@ -502,11 +504,8 @@ class LiftedAtom(_Atom):
 
     @cached_property
     def variables(self) -> list[Variable]:
-        """Arguments for this lifted atom.
-
-        A list of "Variable"s.
-        """
-        return [cast(Variable, ent) for ent in self.entities]
+        """Variable arguments for this lifted atom (excludes object constants)."""
+        return [cast(Variable, ent) for ent in self.entities if isinstance(ent, Variable)]
 
     @cached_property
     def used_predicates(self) -> set[Predicate]:
@@ -518,19 +517,21 @@ class LiftedAtom(_Atom):
 
     @cached_property
     def _str(self) -> str:
-        return str(self.predicate) + "(" + ", ".join(map(str, self.variables)) + ")"
+        return str(self.predicate) + "(" + ", ".join(map(str, self.entities)) + ")"
 
     def ground(
         self, sub: VarToObjSub, state: frozenset[GroundAtom]
     ) -> frozenset[GroundAtom]:
-        """Create a GroundAtom with a given substitution."""
+        """Create a GroundAtom with a given substitution. Object constants pass through."""
         assert set(self.variables).issubset(set(sub.keys()))
-        return frozenset({GroundAtom(self.predicate, [sub[v] for v in self.variables])})
+        entities = [sub[ent] if isinstance(ent, Variable) else cast(Object, ent) for ent in self.entities]
+        return frozenset({GroundAtom(self.predicate, entities)})
 
     def substitute(self, sub: VarToVarSub) -> LiftedAtom:
-        """Create a LiftedAtom with a given substitution."""
+        """Create a LiftedAtom with a given substitution. Object constants pass through."""
         assert set(self.variables).issubset(set(sub.keys()))
-        return LiftedAtom(self.predicate, [sub[v] for v in self.variables])
+        entities = [sub[ent] if isinstance(ent, Variable) else ent for ent in self.entities]
+        return LiftedAtom(self.predicate, entities)
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this lifted atom holds given a substitution and state."""
@@ -568,6 +569,7 @@ class GroundAtom(_Atom):
     def holds(self, state: State) -> bool:
         """Check whether this ground atom holds in the given state."""
         return self.predicate.holds(state, self.objects)
+
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -1242,7 +1244,7 @@ def Not(
         # Create a negated predicate and apply it to the same entities
         negated_predicate = Not(x.predicate)
         if isinstance(x, LiftedAtom):
-            return LiftedAtom(negated_predicate, x.variables)
+            return LiftedAtom(negated_predicate, list(x.entities))
         else:  # GroundAtom
             return GroundAtom(negated_predicate, x.objects)
 
@@ -1257,6 +1259,10 @@ VarToObjSub = dict[Variable, Object]
 VarToVarSub = dict[Variable, Variable]
 LiftedOrGroundAtom = TypeVar("LiftedOrGroundAtom", LiftedAtom, GroundAtom, _Atom)
 ObjectOrVariable = TypeVar("ObjectOrVariable", bound=_TypedEntity)
+
+
+# Ground atoms (predicate applied to objects only).
+AbstractState = frozenset[GroundAtom]
 
 # Type alias for all lifted formula types that implement LiftedFormulaBase interface
 LiftedFormula = Union[
