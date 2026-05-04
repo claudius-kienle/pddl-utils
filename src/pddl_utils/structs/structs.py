@@ -555,6 +555,11 @@ class GroundAtom(_Atom):
     def _str(self) -> str:
         return str(self.predicate) + "(" + ", ".join(map(str, self.objects)) + ")"
 
+    @property
+    def shortened_str(self) -> str:
+        """A shorter string representation of this ground atom, for use in logging."""
+        return str(self.predicate) + "(" + ", ".join(o.name for o in self.objects) + ")"
+
     def lift(self, sub: ObjToVarSub) -> LiftedAtom:
         """Create a LiftedAtom with a given substitution."""
         assert set(self.objects).issubset(set(sub.keys()))
