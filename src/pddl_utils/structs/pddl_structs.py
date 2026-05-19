@@ -27,8 +27,11 @@ class PDDLDomain:
 
     def to_string(self):
         """Create PDDL string"""
-        predicates = "\n\t".join([lit.pddl_str() for lit in self.predicates])
-        operators = "\n".join([op.pddl_str() for op in self.operators])
+        # Sort to make serialization deterministic — ``predicates``/``operators``
+        # are frozensets whose iteration order varies across processes (Python
+        # hash randomization), which breaks anything that hashes ``to_string()``.
+        predicates = "\n\t".join([lit.pddl_str() for lit in sorted(self.predicates, key=lambda p: p.name)])
+        operators = "\n".join([op.pddl_str() for op in sorted(self.operators, key=lambda o: o.name)])
         constants = ""
         requirements = ":strips :typing :universal-preconditions :negative-preconditions :disjunctive-preconditions :existential-preconditions :conditional-effects"
         if "=" in operators:
@@ -81,7 +84,7 @@ class PDDLDomain:
 
     def _types_pddl_str(self):
         types_str = []
-        for type in self.types:
+        for type in sorted(self.types, key=lambda t: t.name):
             if type.parent:
                 types_str.append("{} - {}".format(type.name, type.parent.name))
             else:
@@ -176,7 +179,7 @@ class PDDLProblem:
     def objects_pddl_str(self):
         """Create PDDL string for objects grouped by type."""
         objects_strs = []
-        for obs in self.objects:
+        for obs in sorted(self.objects, key=lambda o: o.name):
             objects_strs.append(f"{obs.name} - {obs.type.name}")
         return " ".join(objects_strs)
 
