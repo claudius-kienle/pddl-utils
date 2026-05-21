@@ -115,22 +115,22 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
-    return _parse_ground_atom(ground_atom_str, known_predicates=known_predicates)
+def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False) -> GroundAtom:
+    return _parse_ground_atom(ground_atom_str, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates)
 
 
-def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate]) -> GroundAtom:
+def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False) -> GroundAtom:
     if ground_atom_str[0] != "(" or ground_atom_str[-1] != ")":
         raise ValueError("The predicate must start and end with parentheses")
 
     not_match = re.match(r"^\(not\s+(\([\w\W]+\))\)$", ground_atom_str.strip())
     if not_match:
         inner = not_match.group(1)
-        return Not(_parse_ground_atom(inner, known_predicates=known_predicates))
+        return Not(_parse_ground_atom(inner, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates))
 
     assert (
         ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
-    ), f"Invalid syntax: '{str(ground_atom_str)}' is not a valid predicate. Maybe you forgot an operator?"
+    ), f"Invalid syntax: '{ground_atom_str}' is not a valid predicate. Maybe you forgot an operator?"
 
     matches = re.match(rf"\(({name_rgx}) *(?: +([\w\W]+))?\)", ground_atom_str)
     if matches is None:
@@ -146,7 +146,10 @@ def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Pred
 
     predicate = next((p for p in known_predicates if p.name == predicate_name), None)
     if predicate is None:
-        raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
+        if allow_missing_predicates:
+            predicate = Predicate(predicate_name, types=[Type("object") for _ in predicate_args])
+        else:
+            raise ValueError(f"Predicate {predicate_name} is not known in the current context.")
 
     objects = [parse_object(a, t) for a, t in zip(predicate_args, predicate.types)]
     return GroundAtom(predicate, objects)
@@ -401,9 +404,10 @@ def parse_ground_formula(
     formula_str: str,
     *,
     known_predicates: frozenset[Predicate],
+    allow_missing_predicates: bool = False,
 ) -> GroundAtom:
     """Parse a single ground atom (predicate applied to objects only)."""
-    return parse_ground_atom(remove_comments(formula_str), known_predicates=known_predicates)
+    return parse_ground_atom(remove_comments(formula_str), known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates)
 
 
 def parse_operator(

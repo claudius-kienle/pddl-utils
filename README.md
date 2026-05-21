@@ -8,6 +8,7 @@ A Python package providing utilities for PDDL (Planning Domain Definition Langua
 - **Local & Docker Execution**: Choose between local installation or Docker containers
 - **Automatic Installation**: Automatically downloads and compiles required tools (local mode)
 - **Statistics Tracking**: Planning statistics including search time, node expansions, and plan quality
+- **LOFT Operator Learning**: Learn lifted STRIPS operators from ground transitions via `pddl_utils.learn.loft.learn_operators` (port of [LOFT_IROS_2021](https://github.com/ronuchit/LOFT_IROS_2021))
 
 ## Installation
 

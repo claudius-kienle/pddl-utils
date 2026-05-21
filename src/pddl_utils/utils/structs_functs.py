@@ -1,3 +1,4 @@
+from pddl_utils import Not
 from itertools import product
 import re
 from typing import Callable, Generator, Sequence, TypeVar
@@ -22,6 +23,61 @@ def transition(curr_state: frozenset[GroundAtom], effect: frozenset[GroundAtom])
         new_state.discard(GroundAtom(atom.predicate.get_negation(), atom.objects))  # remove negation if present
         new_state.add(atom)
     return frozenset(new_state)
+
+
+def get_predicate_evaluation(state: frozenset[GroundAtom]) -> dict[GroundAtom, bool]:
+    pred_eval = {}
+    for atom in state:
+        is_true = True
+        if atom.predicate.is_negated:
+            atom = GroundAtom(atom.predicate.get_negation(), entities=atom.entities)
+            is_true = False
+        if atom in pred_eval:
+            raise RuntimeError("Predicate %s already evaluated." % str(atom.predicate))
+        pred_eval[atom] = is_true
+    return pred_eval
+
+
+def get_pred_change(prior: frozenset[GroundAtom], post: frozenset[GroundAtom]):
+    prior_evals = get_predicate_evaluation(prior)
+    post_evals = get_predicate_evaluation(post)
+
+    effects: set[GroundAtom] = set()
+    removed: set[GroundAtom] = set()
+    for predicate, prior_eval in prior_evals.items():
+        post_eval = post_evals.pop(predicate, None)
+        if post_eval is None:
+            # if the post list does not list the predicate, we assume no effect
+            removed.add(predicate)
+            continue
+
+        if prior_eval == post_eval:
+            # evaluation did not change
+            pass
+        else:
+            # evaluation did change, post eval is effect
+            if post_eval:
+                effects.add(predicate)
+            else:
+                effects.add(Not(predicate))
+
+    added: set[GroundAtom] = {predicate if eval else Not(predicate) for predicate, eval in post_evals.items()}
+    return effects, removed, added
+
+
+def get_effect(
+    prior_predicates: frozenset[GroundAtom], post_predicates: frozenset[GroundAtom]
+) -> frozenset[GroundAtom]:
+    effects, removed, added = get_pred_change(prior_predicates, post_predicates)
+
+    for atom in added:
+        if not atom.predicate.is_negated: # added means was false before, check if true now -> positive effect
+            effects.add(atom)
+    for atom in removed:
+        if not atom.predicate.is_negated: # removed means now false, check if was true before -> negative effect
+            effects.add(Not(atom))
+
+    return frozenset(effects)
 
 
 def get_substitutions(variables: Sequence[Variable], objects: frozenset[Object]) -> Generator[VarToObjSub, None, None]:
