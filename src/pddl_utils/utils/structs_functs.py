@@ -71,10 +71,10 @@ def get_effect(
     effects, removed, added = get_pred_change(prior_predicates, post_predicates)
 
     for atom in added:
-        if not atom.predicate.is_negated: # added means was false before, check if true now -> positive effect
+        if not atom.predicate.is_negated:  # added means was false before, check if true now -> positive effect
             effects.add(atom)
     for atom in removed:
-        if not atom.predicate.is_negated: # removed means now false, check if was true before -> negative effect
+        if not atom.predicate.is_negated:  # removed means now false, check if was true before -> negative effect
             effects.add(Not(atom))
 
     return frozenset(effects)
@@ -225,3 +225,8 @@ def remove_types_from_domain(domain_str: str) -> str:
     domain_str = re.sub(r"\(:types [\w\W]+?\)*(\((?::constants|:predicates|:functions|:derived))", r"\1", domain_str)
 
     return domain_str
+
+
+def abstract_state_to_str(state: frozenset[GroundAtom], *, only_positive: bool = False) -> str:
+    atoms = [a.pddl_str() for a in state if not only_positive or not a.predicate.is_negated]
+    return f"(and { ' '.join(sorted(atoms)) })"

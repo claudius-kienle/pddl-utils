@@ -115,18 +115,28 @@ def parse_objects(content_str: str) -> Sequence[Object]:
     return objects
 
 
-def parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False) -> GroundAtom:
-    return _parse_ground_atom(ground_atom_str, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates)
+def parse_ground_atom(
+    ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False
+) -> GroundAtom:
+    return _parse_ground_atom(
+        ground_atom_str, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates
+    )
 
 
-def _parse_ground_atom(ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False) -> GroundAtom:
+def _parse_ground_atom(
+    ground_atom_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False
+) -> GroundAtom:
     if ground_atom_str[0] != "(" or ground_atom_str[-1] != ")":
         raise ValueError("The predicate must start and end with parentheses")
 
     not_match = re.match(r"^\(not\s+(\([\w\W]+\))\)$", ground_atom_str.strip())
     if not_match:
         inner = not_match.group(1)
-        return Not(_parse_ground_atom(inner, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates))
+        return Not(
+            _parse_ground_atom(
+                inner, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates
+            )
+        )
 
     assert (
         ground_atom_str.count("(") == 1 and ground_atom_str.count(")") == 1
@@ -203,10 +213,10 @@ def parse_predicate(predicate_str: str, *, known_predicates: Optional[frozenset[
         raise ValueError(
             f"Unsupported syntax: '(either ...)' type unions are not supported in predicate definitions. Got: {predicate_str}"
         )
-    if(
-        predicate_str.count("(") != 1 or predicate_str.count(")") != 1
-    ):
-        raise ValueError(f"Invalid syntax: '{str(predicate_str)}' is not a valid predicate. Maybe you forgot an operator?")
+    if predicate_str.count("(") != 1 or predicate_str.count(")") != 1:
+        raise ValueError(
+            f"Invalid syntax: '{str(predicate_str)}' is not a valid predicate. Maybe you forgot an operator?"
+        )
 
     matches = re.match(rf"\(({name_rgx}) *(?: +([\w\W]+))?\)", predicate_str)
     if matches is None:
@@ -407,7 +417,11 @@ def parse_ground_formula(
     allow_missing_predicates: bool = False,
 ) -> GroundAtom:
     """Parse a single ground atom (predicate applied to objects only)."""
-    return parse_ground_atom(remove_comments(formula_str), known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates)
+    return parse_ground_atom(
+        remove_comments(formula_str),
+        known_predicates=known_predicates,
+        allow_missing_predicates=allow_missing_predicates,
+    )
 
 
 def parse_operator(
@@ -493,3 +507,24 @@ def parse_operator(
         preconditions=preconditions,
         effects=effects,
     )
+
+
+def parse_ground_atom_conjunction(
+    conjunction_str: str, *, known_predicates: frozenset[Predicate], allow_missing_predicates: bool = False
+) -> frozenset[GroundAtom]:
+    """Parse a conjunction of ground atoms (e.g., the :init section of a problem)."""
+    conjunction_str = remove_comments(conjunction_str).strip()
+    if conjunction_str.startswith("(and"):
+        atom_strs = parentheses_groups(conjunction_str[4:-1].strip())
+    else:
+        atom_strs = [conjunction_str]
+
+    atoms = set()
+    for atom_str in atom_strs:
+        if atom_str.strip():
+            atoms.add(
+                parse_ground_atom(
+                    atom_str, known_predicates=known_predicates, allow_missing_predicates=allow_missing_predicates
+                )
+            )
+    return frozenset(atoms)
