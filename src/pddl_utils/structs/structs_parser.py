@@ -515,7 +515,10 @@ def parse_ground_atom_conjunction(
     """Parse a conjunction of ground atoms (e.g., the :init section of a problem)."""
     conjunction_str = remove_comments(conjunction_str).strip()
     if conjunction_str.startswith("(and"):
-        atom_strs = parentheses_groups(conjunction_str[4:-1].strip())
+        if conjunction_str[4:].strip() == ")":
+            atom_strs = []
+        else:
+            atom_strs = parentheses_groups(conjunction_str[4:-1].strip())
     else:
         atom_strs = [conjunction_str]
 
