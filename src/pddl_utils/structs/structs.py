@@ -11,7 +11,6 @@ from enum import Enum
 from functools import cached_property
 from itertools import product
 from typing import (
-    Self,
     overload,
     Any,
     Callable,
