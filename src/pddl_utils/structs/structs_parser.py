@@ -106,7 +106,7 @@ def parse_object(constant_str: str, constant_type: Optional[Type] = None) -> Obj
 
 def parse_objects(content_str: str) -> Sequence[Object]:
     objects = list()
-    for obj_group in re.findall(r"([^-]+)-\s*(\w+)", content_str):
+    for obj_group in re.findall(r"((?:\b[\w-]+\s+)+)-\s*(\w+)", content_str):
         obj_names = obj_group[0].strip().split()
         obj_type = parse_type(obj_group[1].strip())
         for obj_name in obj_names:
