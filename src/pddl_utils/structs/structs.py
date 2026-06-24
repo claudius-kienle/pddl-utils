@@ -83,8 +83,27 @@ def is_a_keyword(word: str) -> bool:
     return word in ALL_SYMBOLS
 
 
+class _PicklableCachedHash:
+    """Keep the cached ``_hash`` out of the pickle state so it is recomputed per process.
+
+    ``__hash__`` returns a ``cached_property`` ``_hash = hash(str(self))``. Python salts
+    string hashing per process, so a *pickled* cache would be inconsistent with an equal
+    object built in another process — silently breaking ``dict``/``set`` lookups after a
+    checkpoint reload. Equality is string-based and unaffected; the cache rebuilds lazily.
+    """
+
+    def __getstate__(self) -> dict:
+        return {k: v for k, v in self.__dict__.items() if k != "_hash"}
+
+    def __setstate__(self, state: dict) -> None:
+        # Drop any stale ``_hash`` from the incoming state too, so checkpoints
+        # pickled before this fix (whose stream still carries it) are repaired.
+        state.pop("_hash", None)
+        self.__dict__.update(state)
+
+
 @dataclass(frozen=True, order=False, repr=False)
-class Type:
+class Type(_PicklableCachedHash):
     """Struct defining a type."""
 
     name: str
@@ -160,7 +179,7 @@ class Type:
 
 
 @dataclass(frozen=True, order=False, repr=False)
-class _TypedEntity:
+class _TypedEntity(_PicklableCachedHash):
     """Struct defining an entity with some type, either an object (e.g.,
     block3) or a variable (e.g., ?block).
 
@@ -236,7 +255,7 @@ class Variable(_TypedEntity):
 
 
 @dataclass(frozen=True, order=False, repr=False)
-class Predicate:
+class Predicate(_PicklableCachedHash):
     """Struct defining a predicate (a lifted classifier over states)."""
 
     name: str
@@ -359,7 +378,7 @@ class NamedPredicate(Predicate):
 
 
 @dataclass(frozen=True, repr=False, eq=False)
-class _Atom:
+class _Atom(_PicklableCachedHash):
     """Struct defining an atom (a predicate applied to either variables or
     objects).
 
@@ -466,7 +485,7 @@ class LiftedFormulaBase(ABC):
         ...
 
 
-class LiftedFormulaStrMixin:
+class LiftedFormulaStrMixin(_PicklableCachedHash):
     """Mixin providing common string representation and hashing for lifted formulas.
 
     Classes using this mixin must implement a _str property that returns the string representation.
