@@ -990,6 +990,9 @@ class Operator:
     parameters: Sequence[Variable]
     preconditions: LiftedFormula
     effects: LiftedFormula
+    # Optional non-negative integer action cost. When set, ``pddl_str`` emits an
+    # ``(increase (total-cost) cost)`` effect; not part of identity (``_str``).
+    cost: int | None = None
 
     def __post_init__(self) -> None:
         remaining_precond_vars = self.preconditions.exposed_variables - set(
@@ -1044,7 +1047,15 @@ class Operator:
         file."""
         params_str = " ".join(f"{p.name} - {p.type.name}" for p in self.parameters)
         preconds_str = "\n        ".join(self.preconditions.pddl_str().splitlines())
-        effects_str = "\n        ".join(self.effects.pddl_str().splitlines())
+        effect_body = self.effects.pddl_str().strip()
+        if self.cost is not None:
+            inc = f"(increase (total-cost) {self.cost})"
+            # Splice the cost into the conjunction when there is one, else wrap.
+            if effect_body.startswith("(and"):
+                effect_body = effect_body[: effect_body.rfind(")")].rstrip() + " " + inc + ")"
+            else:
+                effect_body = f"(and {effect_body} {inc})"
+        effects_str = "\n        ".join(effect_body.splitlines())
         return f"""(:action {self.name}
     :parameters ({params_str})
     :precondition {preconds_str}
@@ -1072,6 +1083,7 @@ class Operator:
         parameters: Sequence[Variable] | None = None,
         preconditions: LiftedFormula | None = None,
         effects: LiftedFormula | None = None,
+        cost: int | None = None,
     ) -> Operator:
         """Create a copy of the operator, optionally replacing selected fields."""
         return Operator(
@@ -1079,6 +1091,7 @@ class Operator:
             parameters=parameters if parameters is not None else self.parameters,
             preconditions=preconditions if preconditions is not None else self.preconditions,
             effects=effects if effects is not None else self.effects,
+            cost=cost if cost is not None else self.cost,
         )
 
     def get_complexity(self) -> float:

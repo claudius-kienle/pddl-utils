@@ -39,6 +39,11 @@ def parse_domain(domain_str: str):
 
         if section_type == ":requirements":
             pass
+        elif section_type == ":functions":
+            # Action-cost fluents (e.g. ``(total-cost)``) are emitted by
+            # ``PDDLDomain.to_string`` and consumed by the planner; the lifted
+            # operator carries the cost, so nothing to store here.
+            pass
         elif section_type == ":types":
             types = parse_types(section_content)
         elif section_type == ":predicates":
@@ -117,6 +122,10 @@ def parse_problem(
         elif section_type == ":init":
             if section_content.strip():
                 for fact_str in parentheses_groups(section_content):
+                    # Skip numeric-fluent assignments such as
+                    # ``(= (total-cost) 0)`` — they are not ground atoms.
+                    if re.match(r"\(\s*=\s", fact_str):
+                        continue
                     if infer_predicates:
                         known_predicates |= collect_inferred_predicates(fact_str, objects)
                     fact_atom = parse_ground_atom(fact_str, known_predicates=frozenset(known_predicates))

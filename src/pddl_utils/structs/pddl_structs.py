@@ -37,14 +37,22 @@ class PDDLDomain:
         if "=" in operators:
             requirements += " :equality"
 
+        # Emit action-cost machinery when any operator carries a cost; the
+        # operator ``pddl_str`` adds the matching ``(increase (total-cost) k)``.
+        functions = ""
+        if any(op.cost is not None for op in self.operators):
+            requirements += " :action-costs"
+            functions = "(:functions (total-cost))"
+
         domain_str = """
 (define (domain {})
   (:requirements {})
   (:types {})
   {}
-  (:predicates 
+  (:predicates
 \t{}
   )
+  {}
 
   {}
 )
@@ -54,6 +62,7 @@ class PDDLDomain:
             self._types_pddl_str(),
             constants,
             predicates,
+            functions,
             operators,
         )
         return domain_str
@@ -152,18 +161,29 @@ class PDDLProblem:
                 return obj
         raise ValueError(f"Object with name '{name}' not found in problem objects.")
 
-    def to_string(self):
-        """Create PDDL problem string"""
+    def to_string(self, minimize_total_cost: bool = False):
+        """Create PDDL problem string.
+
+        Set ``minimize_total_cost`` when planning against a domain that declares
+        action costs: it seeds ``(= (total-cost) 0)`` and adds the
+        ``(:metric minimize (total-cost))`` Fast Downward needs to actually
+        optimise cost (otherwise costs are ignored).
+        """
         objects_str = self.objects_pddl_str()
+        init_str = self.init_str
+        metric_str = ""
+        if minimize_total_cost:
+            init_str = f"{init_str}\n    (= (total-cost) 0)"
+            metric_str = "\n  (:metric minimize (total-cost))"
 
         problem_str = f"""
 (define (problem {self.problem_name})
   (:domain {self.domain_name})
   (:objects {objects_str})
-  (:init 
-    {self.init_str}
+  (:init
+    {init_str}
   )
-  (:goal {self.goal_str})
+  (:goal {self.goal_str}){metric_str}
 )
         """.strip()
 

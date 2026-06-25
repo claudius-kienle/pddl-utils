@@ -446,10 +446,12 @@ def parse_operator(
         parameters = previous_action.parameters
         preconditions = previous_action.preconditions
         effects = previous_action.effects
+        cost = previous_action.cost
     else:
         parameters = None
         preconditions = None
         effects = None
+        cost = None
 
     while after_group != "":
         matches = re.match(rf"(:{name_rgx})([\w\W]+)", after_group.strip())
@@ -479,6 +481,13 @@ def parse_operator(
             except ValueError as e:
                 raise ValueError("Parsing precondition in `%s`: %s" % (action_name, str(e)))
         elif var_type == ":effect":
+            # Strip an optional action-cost effect ``(increase (total-cost) k)``
+            # before parsing; ``increase`` is not a predicate. A trailing empty
+            # ``(and )`` left behind is harmless.
+            cost_match = re.search(r"\(\s*increase\s+\(\s*total-cost\s*\)\s+(\d+)\s*\)", var_content)
+            if cost_match is not None:
+                cost = int(cost_match.group(1))
+                var_content = (var_content[: cost_match.start()] + var_content[cost_match.end() :]).strip()
             try:
                 effects = parse_lifted_formula(
                     var_content,
@@ -506,6 +515,7 @@ def parse_operator(
         parameters=parameters,
         preconditions=preconditions,
         effects=effects,
+        cost=cost,
     )
 
 
