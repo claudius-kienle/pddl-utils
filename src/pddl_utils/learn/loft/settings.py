@@ -15,6 +15,14 @@ class LoftConfig:
     builp_var_count_weight: float = 1e-1
     builp_rule_size_weight: float = 1e-2
     builp_referenced_objects_only: bool = True
+    # When True, every transition becomes its own effect-partition instead of being
+    # merged with others that share a lifted effect. Each partition then yields one
+    # operator, and BUILP learns its preconditions against *all* other transitions
+    # (negatives), so same-effect edges that differ in context (e.g. grasp-before-
+    # vs grasp-after-twist) stay separate operators rather than collapsing into one
+    # over-general rule. Useful when a downstream per-operator cost must match a
+    # single edge exactly.
+    builp_one_operator_per_transition: bool = False
     effect_prob_threshold: float = 0.001
 
 

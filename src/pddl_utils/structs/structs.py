@@ -553,9 +553,7 @@ class LiftedAtom(_Atom):
 
     def evaluate(self, sub: VarToObjSub, state: frozenset[GroundAtom]) -> bool:
         """Evaluate whether this lifted atom holds given a substitution and state."""
-        from pddl_utils.utils.structs_functs import filter_valid_state
-
-        return filter_valid_state(self.ground(sub, state)).issubset(state)
+        return self.ground(sub, state).issubset(state)
 
 
 @dataclass(frozen=True, repr=False, eq=False)
@@ -1019,10 +1017,12 @@ class Operator:
         assert isinstance(objects, tuple)
         assert len(objects) == len(self.parameters)
         assert all(o.is_instance(p.type) for o, p in zip(objects, self.parameters))
+        from pddl_utils.utils.structs_functs import complete_state_with_false_ground_atoms
+        state = complete_state_with_false_ground_atoms(state, frozenset(self.preconditions.used_predicates | self.effects.used_predicates), frozenset(objects))
         sub = dict(zip(self.parameters, objects))
 
         preconditions = self.preconditions.evaluate(sub, state)
-        effects = self.effects.ground(sub, state)
+        effects = self.effects.ground(sub, state) - state
         return GroundOperator(self, list(objects), preconditions, effects)
 
     @cached_property

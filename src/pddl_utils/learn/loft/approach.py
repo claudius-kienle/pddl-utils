@@ -115,8 +115,21 @@ class LOFT:
         return NDRSet(lifted_action, ndrs, default_ndr=default_ndr), \
             lifted_action
 
-    @staticmethod
-    def _partition_transitions_by_lifted_effects(transitions, lifted_action):
+    def _partition_transitions_by_lifted_effects(self, transitions, lifted_action):
+        if self._cf.builp_one_operator_per_transition:
+            # One partition per transition: no merging of same-effect edges. Each
+            # transition's lifted effect is kept as-is (duplicates allowed), so the
+            # per-partition negatives in `_learn_ndrs` become every *other*
+            # transition and BUILP specialises each operator's preconditions to a
+            # single edge.
+            lifted_effects = []
+            partitions = []
+            for transition in transitions:
+                _, ground_action, effects = transition
+                obj_to_var = dict(zip(ground_action.entities, lifted_action.entities))
+                partitions.append([transition])
+                lifted_effects.append(frozenset(lift_lit_set(effects, obj_to_var)))
+            return lifted_effects, partitions
         lifted_effects = []
         partitions = []
         for transition in transitions:
